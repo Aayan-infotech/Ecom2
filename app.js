@@ -19,6 +19,9 @@ const cartRoute = require('./routes/cartRoute');
 const deliverySlotRoute = require('./routes/deliverySlotRoute');
 const addressRoute = require('./routes/addressRoute');
 const voucherRoute = require('./routes/voucherRoute');
+const invoiceRoute = require('./routes/invoiceRoute');
+const notificationRoute = require('./routes/notificationRoute');
+const paymentRoute = require('./routes/paymentRoute');
 
 
 
@@ -71,6 +74,9 @@ app.use('/api/cart', cartRoute); //added cart routes
 app.use('/api/deliveryslot', deliverySlotRoute); //added delivery slot routes
 app.use('/api/address', addressRoute); //added address routes
 app.use('/api/voucher', voucherRoute); //added voucher routes
+app.use('/api/invoices', invoiceRoute); 
+app.use('/api/notification', notificationRoute);
+app.use('/api/payment', paymentRoute);
 
 
 
@@ -92,7 +98,7 @@ app.use((obj, req, res, next) => {
 
 // Database connection
 mongoose.set("strictQuery", false);
-mongoose.connect("mongodb+srv://nivedita:ecommerce4312@e-commerce.yv2bdut.mongodb.net/e-Commerce?retryWrites=true&w=majority", { useNewUrlParser: true, useUnifiedTopology: true })
+mongoose.connect("mongodb+srv://nivedita:ecommerce4312@e-commerce.yv2bdut.mongodb.net/e-Commerce")
     .then(() => {
         console.log('connected to MongoDB');
         app.listen(PORT, () => {

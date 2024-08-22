@@ -9,26 +9,23 @@ const productSchema = new mongoose.Schema({
         required: true
     },
     description: {
-        type: String
+        type: String,
+        required: false
     },
     subcategory: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Subcategory',
-        required: true
+        required: false
     },
     image: {
-        type: String // URL to the product image
+        type: String, // URL to the product image
+        required: false,
     },
     stock: {
         type: Number,
         required: true,
         default: 0
     },
-    deliverySlot:[{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Delivery',
-        required: true
-    }],
     discount: {
         type: Number,
         required: false,

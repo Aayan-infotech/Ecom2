@@ -39,7 +39,7 @@ router.put('/edit/:id', editOrder);
 // Cancel Order
 router.post('/cancel/:id', cancelOrder);
 
-router.put('/update-order', updateOrderStatus);
+router.put('/update-order/:orderId', updateOrderStatus);
 
 // Get all orders
 router.get('/getorders', getOrders);

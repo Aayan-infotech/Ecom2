@@ -8,37 +8,34 @@ const { v4: uuidv4 } = require('uuid');
 const validator = require('validator');
 const nodemailer = require('nodemailer');
 const Delivery = require('../models/deliverySlotModel')
-
+const { createNotification } = require('../services/notificationService')
 
 // add product
 const addProduct = async (req, res, next) => {
     try {
-        const { title, description, price, stock, deliverySlots } = req.body;
+        const { name, price, description, subcategory, stock, image, discount } = req.body;
 
         // Validate product fields
-        if (!title || !description || !price || !stock) {
+        if (!name || !description || !subcategory || !price || !stock) {
             return next(createError(400, "All product fields are required!"));
         }
 
         // Check for duplicate product
-        const existingProduct = await Product.findOne({ title });
+        const existingProduct = await Product.findOne({ name });
         if (existingProduct) {
             return next(createError(400, "Product with this title already exists!"));
         }
 
         // Create new product
-        const newProduct = new Product({ title, description, price, stock });
-
-        // Validate delivery slots
-        if (deliverySlots && deliverySlots.length > 0) {
-            const slots = deliverySlots.map(slot => ({
-                deliveryType: slot.deliveryType,
-                date: slot.date,
-                timePeriod: slot.timePeriod,
-                maxOrders: slot.maxOrders
-            }));
-            newProduct.deliverySlots = slots;
-        }
+        const newProduct = new Product({
+            name,
+            description,
+            subcategory,
+            price,
+            stock,
+            image,
+            discount
+        });
 
         await newProduct.save();
 
@@ -344,11 +341,11 @@ const createOrder = async (req, res, next) => {
         const { totalAmount, orderItems } = await calculateTotalAndItems(cart);
         const deliveryCharge = await calculateDeliveryCharge(deliverySlotId); // Calculate delivery charge dynamically
         console.log(deliveryCharge);
-        
+
         const { finalAmount, voucher, voucherUsed } = await applyVoucher(voucherCode, totalAmount);
         const totalWithDelivery = finalAmount + deliveryCharge; // Add delivery charge to the final amount
         console.log(finalAmount);
-        
+
         await updateStockAndClearCart(cart.products, cart);
 
         const orderId = generateOrderId();
@@ -418,13 +415,27 @@ const calculateTotalAndItems = async (cart) => {
         const product = await Product.findById(item.product);
         if (!product) throw createError(404, "Product not found!");
         if (product.stock < item.quantity) throw createError(400, `Not enough stock for ${product.name}`);
+        
+        
+        let productPrice = product.price;
+        let discountAmount = 0;
 
-        totalAmount += product.price * item.quantity;
+        // Check if the product has a discount
+        if (product.discount && product.discount > 0) {
+            // Calculate discount amount and subtract from product price
+            discountAmount = (product.price * product.discount) / 100;
+            productPrice -= discountAmount;
+        }
+
+        const productTotal = productPrice * item.quantity;
+        totalAmount += productTotal;
         orderItems.push({
             product: product._id,
             name: product.name,
             price: product.price,
-            quantity: item.quantity
+            quantity: item.quantity,
+            discount: discountAmount,
+            total: productTotal
         });
     }
     return { totalAmount, orderItems };
@@ -453,6 +464,14 @@ const updateStockAndClearCart = async (products, cart) => {
     for (const item of products) {
         const product = await Product.findById(item.product);
         product.stock -= item.quantity;
+        if (product.stock <= 4) {
+            // Create a notification for the admin about the new user sign-up
+            await createNotification('Product Getting Out of Stock', `${product.name} is getting out of stock.`);
+        }
+        if (product.stock == 0) {
+            // Create a notification for the admin about the new user sign-up
+            await createNotification('Product Out of Stock', `${product.name} is out of stock.`);
+        }
         await product.save();
     }
     cart.products = [];
@@ -614,9 +633,9 @@ const cancelOrder = async (req, res, next) => {
 const updateOrderStatus = async (req, res, next) => {
     try {
         const { orderId } = req.params;
-        const { status } = req.body; // should be 'Approved' or 'Declined'
+        const { status } = req.body;
 
-        let order = await Order.findById(orderId);
+        let order = await Order.findById(orderId).populate('user', 'userName email');
 
         if (!order) {
             return next(createError(404, "Order not found!"));
@@ -626,6 +645,13 @@ const updateOrderStatus = async (req, res, next) => {
 
         await order.save();
 
+        // Prepare email content
+        const subject = `Your order ${order.orderId} has been ${order.status}`;
+        const text = `Dear ${order.user.userName},\n\nYour order with order ID ${order.orderId} has been ${order.status}.\n\nThank you for shopping with us.\n\nBest regards,\nMD Sweden`;
+
+        // Send email notification
+        await sendEmail(order.user.email, subject, text);
+
         res.status(200).json({
             success: true,
             status: 200,
@@ -633,6 +659,7 @@ const updateOrderStatus = async (req, res, next) => {
             data: order
         });
     } catch (error) {
+        console.error("Error updating status:", error);
         return next(createError(500, "Something went wrong!"));
     }
 };

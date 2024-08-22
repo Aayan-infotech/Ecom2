@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken')
 const nodemailer = require('nodemailer')
 const bcrypt = require('bcrypt');
 const validator = require('validator'); // Added validator import
-
+const { createNotification } = require('../services/notificationService')
 
 //to login
 const login = async (req, res, next) => {
@@ -48,6 +48,9 @@ const login = async (req, res, next) => {
     res.cookie('access_token', token, {
       httpOnly: true, // Prevents JavaScript access to the cookie
     });
+
+    // Create a notification for the admin about the new user sign-up
+    await createNotification('user_login', `New user ${user.userName} has logged in.`);
 
     // Send success response
     return res.status(200).json({

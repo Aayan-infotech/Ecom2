@@ -11,7 +11,13 @@ const productSubcategorySchema = mongoose.Schema({
         default: null
     },
     image: {
-        type: String
+        type: String,
+        required: false
+    },
+    isVisible: {
+        type: Boolean,
+        default: false,
+        required: false
     }
     
 },
