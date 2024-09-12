@@ -8,6 +8,7 @@ const bcrypt = require("bcrypt");
 const validator = require('validator');
 const path = require('path');
 const XLSX = require('xlsx');
+const { createNotification } = require('../services/notificationService');
 // const fs = require('fs');
 
 //to Create user
@@ -17,9 +18,9 @@ const register = async (req, res, next) => {
     const { email, password, userName, mobileNumber, age, gender, profileImage } = req.body;
 
     // Email validation
-    if (!validator.isEmail(email)) {
-      return next(createError(400, "Invalid email format"));
-    }
+    // if (!validator.isEmail(email)) {
+    //   return next(createError(400, "Invalid email format"));
+    // }
 
     // Username validation
     if (userName.length <= 1 || userName.length >= 25) {
@@ -66,6 +67,9 @@ const register = async (req, res, next) => {
     // Save the new user to the database
     await newUser.save();
 
+    // Create a notification for the admin about the new user sign-up
+    await createNotification('new_user', `${newUser.userName} has signed up.`);
+
     // Send success response
     return res.status(201).json({
       success: true,
@@ -92,7 +96,8 @@ const getAllUsers = async (req, res, next) => {
 
     // Fetch total number of users
     const totalUsers = await User.countDocuments();
-
+    // console.log("totalUsers", totalUsers);
+    
     // Fetch paginated users
     const users = await User.find()
         .skip(skip)
@@ -458,13 +463,22 @@ const blockUser = async (req, res, next) => {
       const user = await User.findById(id);
 
       if (!user) {
-          return res.status(404).json({ success: false, message: 'User not found' });
+          return res.status(404).json({ 
+            success: false,
+            status: 404,
+            message: 'User not found'
+          });
       }
 
       user.isBlocked = true;
       await user.save();
 
-      res.status(200).json({ success: true, message: 'User blocked successfully', data: user });
+      res.status(200).json({ 
+        success: true,
+        status: 200,
+        message: 'User blocked successfully!', 
+        data: user
+       });
   } catch (error) {
       next(createError(500, 'Something went wrong'));
   }

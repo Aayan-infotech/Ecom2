@@ -50,7 +50,7 @@ const orderSchema = new Schema({
     },
     status: {
         type: String,
-        enum: ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled', 'Approved', 'Declined', 'Delivery Delayed'],
+        enum: ['Pending', 'Cancelled', 'Approved', 'Declined', 'Shipped', 'Delivery Delayed', 'Delivered'],
         default: 'Pending'
     },
     trackingNumber: {

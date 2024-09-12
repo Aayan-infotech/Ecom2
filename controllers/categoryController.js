@@ -53,6 +53,26 @@ const getCategory = async(req, res, next) => {
     }
 };
 
+// get Category by id
+// const getCategoryById = async(req, res, next) =>{
+//     try{
+//         const { categoryId } = req.params;
+
+//         const category = await Category.findById(categoryId);
+
+//         return res.status(200).json({
+//             success: true,
+//             status: 200,
+//             message: "Categories!",
+//             data: category
+//         });
+//     }
+//     catch(error){
+//         console.error("Error getting category by id", error);
+//         return next(createError(500, "Something went wrong!"));
+//     }
+// };
+
 // delete categories
 const deleteCategory = async(req, res, next) =>{
     try{
@@ -78,7 +98,7 @@ const deleteCategory = async(req, res, next) =>{
 const getCategoryById = async (req, res, next) => {
     try {
         const categoryId = req.params.id;
-        console.log(categoryId)
+        // console.log(categoryId)
         // Fetch the category by ID
         const category = await Category.findById(categoryId);
         if (!category) {

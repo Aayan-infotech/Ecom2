@@ -8,37 +8,35 @@ const { v4: uuidv4 } = require('uuid');
 const validator = require('validator');
 const nodemailer = require('nodemailer');
 const Delivery = require('../models/deliverySlotModel')
-
+const { createNotification } = require('../services/notificationService')
 
 // add product
 const addProduct = async (req, res, next) => {
     try {
-        const { title, description, price, stock, deliverySlots } = req.body;
+        const { name, price, description, subcategory, stock, image, discount, category } = req.body;
 
         // Validate product fields
-        if (!title || !description || !price || !stock) {
+        if (!name || !description || !subcategory || !price || !stock || !category) {
             return next(createError(400, "All product fields are required!"));
         }
 
         // Check for duplicate product
-        const existingProduct = await Product.findOne({ title });
+        const existingProduct = await Product.findOne({ name });
         if (existingProduct) {
             return next(createError(400, "Product with this title already exists!"));
         }
 
         // Create new product
-        const newProduct = new Product({ title, description, price, stock });
-
-        // Validate delivery slots
-        if (deliverySlots && deliverySlots.length > 0) {
-            const slots = deliverySlots.map(slot => ({
-                deliveryType: slot.deliveryType,
-                date: slot.date,
-                timePeriod: slot.timePeriod,
-                maxOrders: slot.maxOrders
-            }));
-            newProduct.deliverySlots = slots;
-        }
+        const newProduct = new Product({
+            name,
+            description,
+            subcategory,
+            category,
+            price,
+            stock,
+            image,
+            discount
+        });
 
         await newProduct.save();
 
@@ -58,7 +56,7 @@ const addProduct = async (req, res, next) => {
 // get Products
 const getAllProduct = async (req, res, next) => {
     try {
-        const products = await Product.find().populate('subcategory', 'title');
+        const products = await Product.find().populate('subcategory', 'title').populate('category', 'title');  // Populating category with the title field;
 
         return res.status(200).json({
             success: true,
@@ -124,6 +122,34 @@ const getProductsBySubcategoryId = async (req, res, next) => {
     }
 };
 
+// fetch product by category
+const getProductByCategoryId = async(req, res, next) => {
+    try{
+    const { categoryId } = req.params;
+
+    if(!categoryId){
+        return next(createError(400, "Enter the category id!"));
+    }
+
+    const products = await Product.find({category: categoryId});
+
+    // if(products.length === 0){
+    //     return next(createError(404, "Products does not exist!"));
+    // }
+
+    return res.status(200).json({
+        success: true,
+        status: 200,
+        message: "Products fetched by category!",
+        data: products
+    });
+    }
+    catch(error){
+        console.error("Error fetching the category", error);
+        return next(createError(500, "Something went wrong!"));
+    }
+};
+
 // delete product
 const deleteProduct = async (req, res, next) => {
     try {
@@ -148,7 +174,7 @@ const deleteProduct = async (req, res, next) => {
 const updateProduct = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { name, price, description, subcategory, image, stock } = req.body;
+        const { name, price, description, subcategory, image, stock, category } = req.body;
 
         if (!name || !price || !subcategory || !stock) {
             return next(createError(400, "Name, Price, Subcategory and stock are required!"));
@@ -166,6 +192,8 @@ const updateProduct = async (req, res, next) => {
         existingProduct.subcategory = subcategory;
         existingProduct.image = image;
         existingProduct.stock = stock;
+        existingProduct.category = category;
+
 
         // Save the updated product
         await existingProduct.save();
@@ -344,11 +372,11 @@ const createOrder = async (req, res, next) => {
         const { totalAmount, orderItems } = await calculateTotalAndItems(cart);
         const deliveryCharge = await calculateDeliveryCharge(deliverySlotId); // Calculate delivery charge dynamically
         console.log(deliveryCharge);
-        
+
         const { finalAmount, voucher, voucherUsed } = await applyVoucher(voucherCode, totalAmount);
         const totalWithDelivery = finalAmount + deliveryCharge; // Add delivery charge to the final amount
         console.log(finalAmount);
-        
+
         await updateStockAndClearCart(cart.products, cart);
 
         const orderId = generateOrderId();
@@ -419,12 +447,26 @@ const calculateTotalAndItems = async (cart) => {
         if (!product) throw createError(404, "Product not found!");
         if (product.stock < item.quantity) throw createError(400, `Not enough stock for ${product.name}`);
 
-        totalAmount += product.price * item.quantity;
+
+        let productPrice = product.price;
+        let discountAmount = 0;
+
+        // Check if the product has a discount
+        if (product.discount && product.discount > 0) {
+            // Calculate discount amount and subtract from product price
+            discountAmount = (product.price * product.discount) / 100;
+            productPrice -= discountAmount;
+        }
+
+        const productTotal = productPrice * item.quantity;
+        totalAmount += productTotal;
         orderItems.push({
             product: product._id,
             name: product.name,
             price: product.price,
-            quantity: item.quantity
+            quantity: item.quantity,
+            discount: discountAmount,
+            total: productTotal
         });
     }
     return { totalAmount, orderItems };
@@ -453,6 +495,14 @@ const updateStockAndClearCart = async (products, cart) => {
     for (const item of products) {
         const product = await Product.findById(item.product);
         product.stock -= item.quantity;
+        if (product.stock <= 4) {
+            // Create a notification for the admin about the new user sign-up
+            await createNotification('Product Getting Out of Stock', `${product.name} is getting out of stock.`);
+        }
+        if (product.stock == 0) {
+            // Create a notification for the admin about the new user sign-up
+            await createNotification('Product Out of Stock', `${product.name} is out of stock.`);
+        }
         await product.save();
     }
     cart.products = [];
@@ -494,7 +544,6 @@ const saveOrder = async (userId, orderItems, totalAmount, voucher, voucherUsed, 
     });
     return await newOrder.save();
 };
-
 
 const sendEmail = async (to, subject, text) => {
     try {
@@ -614,9 +663,9 @@ const cancelOrder = async (req, res, next) => {
 const updateOrderStatus = async (req, res, next) => {
     try {
         const { orderId } = req.params;
-        const { status } = req.body; // should be 'Approved' or 'Declined'
+        const { status } = req.body;
 
-        let order = await Order.findById(orderId);
+        let order = await Order.findById(orderId).populate('user', 'userName email');
 
         if (!order) {
             return next(createError(404, "Order not found!"));
@@ -626,6 +675,13 @@ const updateOrderStatus = async (req, res, next) => {
 
         await order.save();
 
+        // Prepare email content
+        const subject = `Your order ${order.orderId} has been ${order.status}`;
+        const text = `Dear ${order.user.userName},\n\nYour order with order ID ${order.orderId} has been ${order.status}.\n\nThank you for shopping with us.\n\nBest regards,\nMD Sweden`;
+
+        // Send email notification
+        await sendEmail(order.user.email, subject, text);
+
         res.status(200).json({
             success: true,
             status: 200,
@@ -633,6 +689,7 @@ const updateOrderStatus = async (req, res, next) => {
             data: order
         });
     } catch (error) {
+        console.error("Error updating status:", error);
         return next(createError(500, "Something went wrong!"));
     }
 };
@@ -702,6 +759,59 @@ const declineOrder = async (req, res, next) => {
         return next(createError(500, "Something went wrong!"));
     }
 };
+
+const calculateProductFrequencyFromOrders = async () => {
+    try {
+        const orders = await Order.find(); // Fetch all orders from the database
+        const productFrequency = {};
+
+        // Traverse through all orders
+        orders.forEach(order => {
+            // Ensure orderItems is an array before proceeding
+            if (Array.isArray(order.orderItems) && order.orderItems.length > 0) {
+                order.orderItems.forEach(item => {
+                    const productId = item.product.toString(); // Ensure productId is a string
+                    if (productFrequency[productId]) {
+                        productFrequency[productId] += item.quantity; // Add to existing quantity
+                    } else {
+                        productFrequency[productId] = item.quantity; // Initialize with current quantity
+                    }
+                });
+            }
+        });
+
+        // Convert productFrequency object to array and sort by frequency (descending order)
+        const sortedProducts = Object.entries(productFrequency).sort((a, b) => b[1] - a[1]);
+
+        // Logging or returning the sorted result
+        console.log("Sorted Product Frequency:", sortedProducts);
+        return sortedProducts; // You can return or process this data further
+    } catch (error) {
+        console.error('Error calculating product frequency:', error);
+        throw new Error("Failed to calculate product frequency!");
+    }
+};
+
+
+
+const getProductFrequency = async (req, res, next) => {
+    try {
+        const productFrequency = await calculateProductFrequencyFromOrders();
+        console.log("productFrequency", productFrequency);
+        
+        return res.status(200).json({
+            success: true,
+            message: "Product frequency calculated successfully!",
+            data: {
+                productFrequency
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching product frequency:', error);
+        return next(createError(500, "Failed to fetch product frequency!"));
+    }
+};
+
 
 
 // Export Order Details
@@ -814,6 +924,57 @@ const getRecommendations = async (req, res, next) => {
     }
 };
 
+// Utility function to shuffle and limit the array
+const getRandomItems = (array, numItems) => {
+    const shuffled = array.sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, numItems);
+};
+
+// Route to get 10-12 random item recommendations based on the entered month and subcategory
+const getRecommendationByMonth = async (req, res) => {
+    const { subcategoryId } = req.params; // Get subcategoryId from query parameters
+    const { month } = req.query; // Get month from the request body
+
+    if (!month || isNaN(month) || month < 1 || month > 12) {
+        return res.status(400).json({ message: 'Please provide a valid month (1-12).' });
+    }
+
+    if (!subcategoryId) {
+        return res.status(400).json({ message: 'Please provide a valid subcategoryId.' });
+    }
+
+    try {
+        // Convert month input to a valid Date range for that month
+        const startDate = new Date(new Date().getFullYear(), month - 1, 1);
+        const endDate = new Date(new Date().getFullYear(), month, 0); // End of the month
+
+        // Find orders within the date range and subcategory
+        const orders = await Order.find({
+            orderDate: {
+                $gte: startDate,
+                $lt: endDate,
+            },
+            subcategoryId: subcategoryId, // Filter by subcategoryId
+        });
+
+        if (orders.length === 0) {
+            return res.status(404).json({ message: 'No items found for the given month and subcategory.' });
+        }
+
+        // Get 10-12 random orders from the result
+        const randomOrders = getRandomItems(orders, Math.floor(Math.random() * 3) + 10);
+
+        // Extract the item names from the random orders
+        const recommendedItems = randomOrders.map(order => order.itemName);
+
+        // Return the recommended items
+        res.json({ recommendedItems });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+
 
 
 module.exports = {
@@ -833,5 +994,8 @@ module.exports = {
     getOrders,
     approveOrder,
     declineOrder,
-    getRecommendations
+    getRecommendations,
+    getRecommendationByMonth,
+    getProductByCategoryId,
+    getProductFrequency
 };

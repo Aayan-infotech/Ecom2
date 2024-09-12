@@ -120,6 +120,64 @@ const deleteSubcategory = async (req, res, next) => {
 };
 
 
+// Function to toggle the visibility of a subcategory
+const toggleVisibility = async (req, res) => {
+    try {
+        const subcategoryId = req.params.id;
+        const subcategory = await Subcategory.findById(subcategoryId);
+
+        if (!subcategory) {
+            return res.status(404).json({ message: 'Subcategory not found' });
+        }
+
+        // Toggle the isVisible field
+        subcategory.isVisible = !subcategory.isVisible;
+        await subcategory.save();
+
+        return res.status(200).json({
+            success: true,
+            status: 200,
+            message: `Subcategory visibility updated to ${subcategory.isVisible}`,
+            subcategory
+        });
+    } catch (error) {
+        return res.status(500).json({ error: 'Error updating visibility' });
+    }
+};
+
+// Update subcategory visibility
+const updateSubcategoryVisibility = async (req, res) => {
+    try {
+        const { subcategoryId } = req.params;
+        const { menuVisible } = req.body;
+
+        const updatedSubcategory = await Subcategory.findByIdAndUpdate(
+            subcategoryId,
+            { menuVisible },
+            { new: true }
+        );
+
+        if (!updatedSubcategory) {
+            return res.status(404).json({ message: 'Subcategory not found' });
+        }
+
+        res.status(200).json(updatedSubcategory);
+    } catch (error) {
+        res.status(500).json({ message: 'Error updating subcategory visibility', error });
+    }
+};
+
+// Get visible subcategories
+const getVisibleSubcategories = async (req, res) => {
+    try {
+        const visibleSubcategories = await Subcategory.find({ menuVisible: true });
+        res.status(200).json(visibleSubcategories);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching visible subcategories', error });
+    }
+};
+
+
 
 
 module.exports = {
@@ -127,5 +185,8 @@ module.exports = {
     getAllSubcategory,
     getSubcategoryById,
     updateSubcategory,
-    deleteSubcategory
+    deleteSubcategory,
+    toggleVisibility,
+    updateSubcategoryVisibility,
+    getVisibleSubcategories
 };
