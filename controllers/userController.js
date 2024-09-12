@@ -18,9 +18,9 @@ const register = async (req, res, next) => {
     const { email, password, userName, mobileNumber, age, gender, profileImage } = req.body;
 
     // Email validation
-    if (!validator.isEmail(email)) {
-      return next(createError(400, "Invalid email format"));
-    }
+    // if (!validator.isEmail(email)) {
+    //   return next(createError(400, "Invalid email format"));
+    // }
 
     // Username validation
     if (userName.length <= 1 || userName.length >= 25) {
@@ -96,7 +96,8 @@ const getAllUsers = async (req, res, next) => {
 
     // Fetch total number of users
     const totalUsers = await User.countDocuments();
-
+    // console.log("totalUsers", totalUsers);
+    
     // Fetch paginated users
     const users = await User.find()
         .skip(skip)

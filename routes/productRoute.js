@@ -16,7 +16,10 @@ const {
     getOrders,
     approveOrder,
     declineOrder,
-    getRecommendations
+    getRecommendations,
+    getRecommendationByMonth,
+    getProductByCategoryId,
+    getProductFrequency
 } = require("../controllers/productController");
 
 
@@ -32,6 +35,7 @@ router.post('/search', searchProduct);
 router.post('/order', createOrder);
 router.get('/order-history/:id', getOrderHistory);
 router.put('/update/:id', updateProduct);
+router.get('/:subcategoryId/recommendation', getRecommendationByMonth);
 
 // Edit Order
 router.put('/edit/:id', editOrder);
@@ -49,5 +53,9 @@ router.post('/approve/:id', approveOrder);
 router.post('/decline/:id', declineOrder);
 
 router.get('/recommended/:productId', getRecommendations);
+
+router.get('/categoryproducts/:categoryId', getProductByCategoryId);
+
+router.get('/frequency', getProductFrequency);
 
 module.exports = router;

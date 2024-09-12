@@ -42,12 +42,6 @@ exports.downloadInvoicePDF = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Invoice not found!' });
         }
 
-        console.log(11, invoice);
-
-        console.log("CUSTOMER", invoice.customer);
-
-        const customerData = await User.findById(invoice.customer);
-
         // Generate the PDF for the invoice
         const pdfBuffer = await InvoiceService.generateInvoicePDF(invoice);
 

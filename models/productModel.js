@@ -15,7 +15,12 @@ const productSchema = new mongoose.Schema({
     subcategory: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Subcategory',
-        required: false
+        required: true
+    },
+    category: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Category',
+        required: true
     },
     image: {
         type: String, // URL to the product image

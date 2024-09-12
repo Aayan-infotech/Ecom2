@@ -5,7 +5,7 @@ const {
     getCategory,
     deleteCategory,
     getCategoryById,
-    updateCategory
+    updateCategory,
 } = require("../controllers/categoryController");
 
 

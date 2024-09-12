@@ -13,10 +13,10 @@ const { createNotification } = require('../services/notificationService')
 // add product
 const addProduct = async (req, res, next) => {
     try {
-        const { name, price, description, subcategory, stock, image, discount } = req.body;
+        const { name, price, description, subcategory, stock, image, discount, category } = req.body;
 
         // Validate product fields
-        if (!name || !description || !subcategory || !price || !stock) {
+        if (!name || !description || !subcategory || !price || !stock || !category) {
             return next(createError(400, "All product fields are required!"));
         }
 
@@ -31,6 +31,7 @@ const addProduct = async (req, res, next) => {
             name,
             description,
             subcategory,
+            category,
             price,
             stock,
             image,
@@ -55,7 +56,7 @@ const addProduct = async (req, res, next) => {
 // get Products
 const getAllProduct = async (req, res, next) => {
     try {
-        const products = await Product.find().populate('subcategory', 'title');
+        const products = await Product.find().populate('subcategory', 'title').populate('category', 'title');  // Populating category with the title field;
 
         return res.status(200).json({
             success: true,
@@ -121,6 +122,34 @@ const getProductsBySubcategoryId = async (req, res, next) => {
     }
 };
 
+// fetch product by category
+const getProductByCategoryId = async(req, res, next) => {
+    try{
+    const { categoryId } = req.params;
+
+    if(!categoryId){
+        return next(createError(400, "Enter the category id!"));
+    }
+
+    const products = await Product.find({category: categoryId});
+
+    // if(products.length === 0){
+    //     return next(createError(404, "Products does not exist!"));
+    // }
+
+    return res.status(200).json({
+        success: true,
+        status: 200,
+        message: "Products fetched by category!",
+        data: products
+    });
+    }
+    catch(error){
+        console.error("Error fetching the category", error);
+        return next(createError(500, "Something went wrong!"));
+    }
+};
+
 // delete product
 const deleteProduct = async (req, res, next) => {
     try {
@@ -145,7 +174,7 @@ const deleteProduct = async (req, res, next) => {
 const updateProduct = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { name, price, description, subcategory, image, stock } = req.body;
+        const { name, price, description, subcategory, image, stock, category } = req.body;
 
         if (!name || !price || !subcategory || !stock) {
             return next(createError(400, "Name, Price, Subcategory and stock are required!"));
@@ -163,6 +192,8 @@ const updateProduct = async (req, res, next) => {
         existingProduct.subcategory = subcategory;
         existingProduct.image = image;
         existingProduct.stock = stock;
+        existingProduct.category = category;
+
 
         // Save the updated product
         await existingProduct.save();
@@ -415,8 +446,8 @@ const calculateTotalAndItems = async (cart) => {
         const product = await Product.findById(item.product);
         if (!product) throw createError(404, "Product not found!");
         if (product.stock < item.quantity) throw createError(400, `Not enough stock for ${product.name}`);
-        
-        
+
+
         let productPrice = product.price;
         let discountAmount = 0;
 
@@ -513,7 +544,6 @@ const saveOrder = async (userId, orderItems, totalAmount, voucher, voucherUsed, 
     });
     return await newOrder.save();
 };
-
 
 const sendEmail = async (to, subject, text) => {
     try {
@@ -730,6 +760,59 @@ const declineOrder = async (req, res, next) => {
     }
 };
 
+const calculateProductFrequencyFromOrders = async () => {
+    try {
+        const orders = await Order.find(); // Fetch all orders from the database
+        const productFrequency = {};
+
+        // Traverse through all orders
+        orders.forEach(order => {
+            // Ensure orderItems is an array before proceeding
+            if (Array.isArray(order.orderItems) && order.orderItems.length > 0) {
+                order.orderItems.forEach(item => {
+                    const productId = item.product.toString(); // Ensure productId is a string
+                    if (productFrequency[productId]) {
+                        productFrequency[productId] += item.quantity; // Add to existing quantity
+                    } else {
+                        productFrequency[productId] = item.quantity; // Initialize with current quantity
+                    }
+                });
+            }
+        });
+
+        // Convert productFrequency object to array and sort by frequency (descending order)
+        const sortedProducts = Object.entries(productFrequency).sort((a, b) => b[1] - a[1]);
+
+        // Logging or returning the sorted result
+        console.log("Sorted Product Frequency:", sortedProducts);
+        return sortedProducts; // You can return or process this data further
+    } catch (error) {
+        console.error('Error calculating product frequency:', error);
+        throw new Error("Failed to calculate product frequency!");
+    }
+};
+
+
+
+const getProductFrequency = async (req, res, next) => {
+    try {
+        const productFrequency = await calculateProductFrequencyFromOrders();
+        console.log("productFrequency", productFrequency);
+        
+        return res.status(200).json({
+            success: true,
+            message: "Product frequency calculated successfully!",
+            data: {
+                productFrequency
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching product frequency:', error);
+        return next(createError(500, "Failed to fetch product frequency!"));
+    }
+};
+
+
 
 // Export Order Details
 // const exportOrders = async (req, res, next) => {
@@ -841,6 +924,57 @@ const getRecommendations = async (req, res, next) => {
     }
 };
 
+// Utility function to shuffle and limit the array
+const getRandomItems = (array, numItems) => {
+    const shuffled = array.sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, numItems);
+};
+
+// Route to get 10-12 random item recommendations based on the entered month and subcategory
+const getRecommendationByMonth = async (req, res) => {
+    const { subcategoryId } = req.params; // Get subcategoryId from query parameters
+    const { month } = req.query; // Get month from the request body
+
+    if (!month || isNaN(month) || month < 1 || month > 12) {
+        return res.status(400).json({ message: 'Please provide a valid month (1-12).' });
+    }
+
+    if (!subcategoryId) {
+        return res.status(400).json({ message: 'Please provide a valid subcategoryId.' });
+    }
+
+    try {
+        // Convert month input to a valid Date range for that month
+        const startDate = new Date(new Date().getFullYear(), month - 1, 1);
+        const endDate = new Date(new Date().getFullYear(), month, 0); // End of the month
+
+        // Find orders within the date range and subcategory
+        const orders = await Order.find({
+            orderDate: {
+                $gte: startDate,
+                $lt: endDate,
+            },
+            subcategoryId: subcategoryId, // Filter by subcategoryId
+        });
+
+        if (orders.length === 0) {
+            return res.status(404).json({ message: 'No items found for the given month and subcategory.' });
+        }
+
+        // Get 10-12 random orders from the result
+        const randomOrders = getRandomItems(orders, Math.floor(Math.random() * 3) + 10);
+
+        // Extract the item names from the random orders
+        const recommendedItems = randomOrders.map(order => order.itemName);
+
+        // Return the recommended items
+        res.json({ recommendedItems });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+
 
 
 module.exports = {
@@ -860,5 +994,8 @@ module.exports = {
     getOrders,
     approveOrder,
     declineOrder,
-    getRecommendations
+    getRecommendations,
+    getRecommendationByMonth,
+    getProductByCategoryId,
+    getProductFrequency
 };
