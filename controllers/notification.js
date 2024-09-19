@@ -5,7 +5,7 @@ admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
 });
 
-const notification = async (userId,title, body,deviceToken)=>{
+const notification = async (title, body,deviceToken)=>{
   try {
     const message = {
         notification: {
@@ -15,14 +15,14 @@ const notification = async (userId,title, body,deviceToken)=>{
         token:deviceToken
       };
 
-      if(userId){
-        const newUser = new notificationModel({
-            userId,
-            body,
-            title,
-        });
-        await newUser.save();
-      }
+      // if(userId!==''){
+      //   const newUser = new notificationModel({
+      //       userId,
+      //       body,
+      //       title,
+      //   });
+      //   await newUser.save();
+      // }
       
       await admin.messaging().send(message)
       .then((response) => {

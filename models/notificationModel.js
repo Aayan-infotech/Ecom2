@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const Schema = mongoose.Schema;
 
 const notificationSchema = new mongoose.Schema({
-    userId: { type: Schema.Types.ObjectId, required: true, ref: 'User' },
+    // userId: { type: Schema.Types.ObjectId, required: true, ref: 'User' },
     title: { type: String },
     body: { type: String },
     status: {

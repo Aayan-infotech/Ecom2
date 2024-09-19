@@ -15,7 +15,7 @@ const {notification}=require('../controllers/notification')
 const register = async (req, res, next) => {
   try {
     const { email, password, userName, mobileNumber, age, gender, profileImage, deviceToken } = req.body;
-
+    // const userId='';
     if (userName.length <= 1 || userName.length >= 25) {
       return next(createError(400, "Username must be between 2 to 25 characters long"));
     }
@@ -51,9 +51,8 @@ const register = async (req, res, next) => {
 
     await newUser.save();
     const title = 'Welcome to this App';
-    const body = `Congratulations, ${userName}! Your registration is complete. We’re excited to have you on board.`;
-    const userId='';
-    await notification(userId,title,body,deviceToken)
+    const body = `Congratulations, ${userName}! Your registration is complete. We're excited to have you on board.`;
+    await notification(title,body,deviceToken)
     await createNotification('new_user', `${newUser.userName} has signed up.`);
 
     return res.status(201).json({
