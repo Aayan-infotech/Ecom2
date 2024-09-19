@@ -35,7 +35,12 @@ const productSchema = new mongoose.Schema({
         type: Number,
         required: false,
         default: 0
-    }
+    },
+    isHighlight: {
+        type: Boolean,
+        required: false,
+        default: false,
+    },
 },
 {
     timestamps: true

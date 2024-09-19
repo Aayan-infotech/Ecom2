@@ -59,6 +59,10 @@ const UserSchema = mongoose.Schema(
         isEmailVerified: {
             type: Boolean,
             default: false
+        },
+        deviceToken: {
+            type: String,
+            required: false,
         }
     },
     {

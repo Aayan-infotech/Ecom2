@@ -15,7 +15,7 @@ const { createNotification } = require('../services/notificationService');
 const register = async (req, res, next) => {
   try {
     // Extract the necessary fields from the request body
-    const { email, password, userName, mobileNumber, age, gender, profileImage } = req.body;
+    const { email, password, userName, mobileNumber, age, gender, profileImage, deviceToken } = req.body;
 
     // Email validation
     // if (!validator.isEmail(email)) {
@@ -62,6 +62,7 @@ const register = async (req, res, next) => {
       gender,
       profileImage,
       role: "user",
+      deviceToken,
     });
 
     // Save the new user to the database

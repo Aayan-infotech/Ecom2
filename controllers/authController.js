@@ -10,11 +10,11 @@ const { createNotification } = require('../services/notificationService')
 //to login
 const login = async (req, res, next) => {
   try {
-    const { emailOrUsername, password } = req.body;
+    const { emailOrUsername, password, deviceToken } = req.body;
     
     // Validate input
-    if (!emailOrUsername || !password) {
-      return next(createError(400, "Email/Username and password are required"));
+    if (!emailOrUsername || !password || !deviceToken) {
+      return next(createError(400, "Email/Username, password or device token are required"));
     }
 
     // Find the user by email or username

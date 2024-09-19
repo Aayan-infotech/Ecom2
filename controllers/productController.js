@@ -13,7 +13,7 @@ const { createNotification } = require('../services/notificationService')
 // add product
 const addProduct = async (req, res, next) => {
     try {
-        const { name, price, description, subcategory, stock, image, discount, category } = req.body;
+        const { name, price, description, subcategory, stock, image, discount, category, isHighlight } = req.body;
 
         // Validate product fields
         if (!name || !description || !subcategory || !price || !stock || !category) {
@@ -763,29 +763,43 @@ const declineOrder = async (req, res, next) => {
 const calculateProductFrequencyFromOrders = async () => {
     try {
         const orders = await Order.find(); // Fetch all orders from the database
-        const productFrequency = {};
+        console.log("orders", orders);
+
+        const monthlyProductFrequency = {}; // Object to hold frequencies by month
 
         // Traverse through all orders
         orders.forEach(order => {
-            // Ensure orderItems is an array before proceeding
-            if (Array.isArray(order.orderItems) && order.orderItems.length > 0) {
-                order.orderItems.forEach(item => {
+            // Ensure items is an array before proceeding
+            if (Array.isArray(order.items) && order.items.length > 0) {
+                // Extract month and year from orderDate
+                const orderDate = new Date(order.orderDate);
+                const monthYear = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`; // Format: YYYY-M
+
+                // Initialize the month if it doesn't exist
+                if (!monthlyProductFrequency[monthYear]) {
+                    monthlyProductFrequency[monthYear] = {};
+                }
+
+                order.items.forEach(item => {
                     const productId = item.product.toString(); // Ensure productId is a string
-                    if (productFrequency[productId]) {
-                        productFrequency[productId] += item.quantity; // Add to existing quantity
+                    if (monthlyProductFrequency[monthYear][productId]) {
+                        monthlyProductFrequency[monthYear][productId] += item.quantity; // Add to existing quantity
                     } else {
-                        productFrequency[productId] = item.quantity; // Initialize with current quantity
+                        monthlyProductFrequency[monthYear][productId] = item.quantity; // Initialize with current quantity
                     }
                 });
             }
         });
 
-        // Convert productFrequency object to array and sort by frequency (descending order)
-        const sortedProducts = Object.entries(productFrequency).sort((a, b) => b[1] - a[1]);
+        // Convert monthlyProductFrequency object to array and sort by month
+        const sortedMonthlyFrequencies = Object.entries(monthlyProductFrequency).map(([monthYear, productFrequency]) => {
+            const sortedProducts = Object.entries(productFrequency).sort((a, b) => b[1] - a[1]);
+            return { monthYear, sortedProducts };
+        });
 
         // Logging or returning the sorted result
-        console.log("Sorted Product Frequency:", sortedProducts);
-        return sortedProducts; // You can return or process this data further
+        console.log("Sorted Monthly Product Frequency:", sortedMonthlyFrequencies);
+        return sortedMonthlyFrequencies; // You can return or process this data further
     } catch (error) {
         console.error('Error calculating product frequency:', error);
         throw new Error("Failed to calculate product frequency!");
@@ -796,21 +810,24 @@ const calculateProductFrequencyFromOrders = async () => {
 
 const getProductFrequency = async (req, res, next) => {
     try {
-        const productFrequency = await calculateProductFrequencyFromOrders();
-        console.log("productFrequency", productFrequency);
+        // Fetch the product frequency by month from the updated function
+        const monthlyProductFrequency = await calculateProductFrequencyFromOrders();
+        console.log("Monthly Product Frequency:", monthlyProductFrequency);
         
+        // Return the result in the API response
         return res.status(200).json({
             success: true,
-            message: "Product frequency calculated successfully!",
+            message: "Product frequency by month calculated successfully!",
             data: {
-                productFrequency
+                monthlyProductFrequency
             }
         });
     } catch (error) {
-        console.error('Error fetching product frequency:', error);
-        return next(createError(500, "Failed to fetch product frequency!"));
+        console.error('Error fetching product frequency by month:', error);
+        return next(createError(500, "Failed to fetch product frequency by month!"));
     }
 };
+
 
 
 
@@ -933,7 +950,7 @@ const getRandomItems = (array, numItems) => {
 // Route to get 10-12 random item recommendations based on the entered month and subcategory
 const getRecommendationByMonth = async (req, res) => {
     const { subcategoryId } = req.params; // Get subcategoryId from query parameters
-    const { month } = req.query; // Get month from the request body
+    const { month } = req.body; // Get month from the request body
 
     if (!month || isNaN(month) || month < 1 || month > 12) {
         return res.status(400).json({ message: 'Please provide a valid month (1-12).' });
