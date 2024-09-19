@@ -9,35 +9,21 @@ const validator = require('validator');
 const path = require('path');
 const XLSX = require('xlsx');
 const { createNotification } = require('../services/notificationService');
-// const fs = require('fs');
+const {notification}=require('../controllers/notification')
 
 //to Create user
 const register = async (req, res, next) => {
   try {
-    // Extract the necessary fields from the request body
     const { email, password, userName, mobileNumber, age, gender, profileImage, deviceToken } = req.body;
 
-    // Email validation
-    // if (!validator.isEmail(email)) {
-    //   return next(createError(400, "Invalid email format"));
-    // }
-
-    // Username validation
     if (userName.length <= 1 || userName.length >= 25) {
       return next(createError(400, "Username must be between 2 to 25 characters long"));
     }
 
-    // Mobile number validation
-    // if (mobileNumber && (!mobileNumber.startsWith('+1') || mobileNumber.length !== 12 || isNaN(mobileNumber.slice(2)))) {
-    //   return next(createError(400, "Invalid mobile number format. Must start with +1 followed by 10 digits."));
-    // }
-
-    // Age validation (optional)
     if (age && (age < 0 || age > 120)) {
       return next(createError(400, "Invalid age"));
     }
 
-    // Check if the user already exists by email or username
     const existingUser = await User.findOne({
       $or: [{ email: email }, { userName: userName }]
     });
@@ -49,10 +35,8 @@ const register = async (req, res, next) => {
       });
     }
 
-    // Hash the password
     const hashedPassword = await bcrypt.hash(password, 8);
 
-    // Create a new user
     const newUser = new User({
       userName,
       email,
@@ -65,13 +49,13 @@ const register = async (req, res, next) => {
       deviceToken,
     });
 
-    // Save the new user to the database
     await newUser.save();
-
-    // Create a notification for the admin about the new user sign-up
+    const title = 'Welcome to this App';
+    const body = `Congratulations, ${userName}! Your registration is complete. We’re excited to have you on board.`;
+    const userId='';
+    await notification(userId,title,body,deviceToken)
     await createNotification('new_user', `${newUser.userName} has signed up.`);
 
-    // Send success response
     return res.status(201).json({
       success: true,
       status: 201,
@@ -79,8 +63,6 @@ const register = async (req, res, next) => {
       data: newUser,
     });
   } catch (error) {
-    // Handle any errors that occur during the process
-    console.error('Error in register:', error);
     return next(createError(500, "Something went wrong"));
   }
 };
@@ -90,30 +72,24 @@ const register = async (req, res, next) => {
 //get users
 const getAllUsers = async (req, res, next) => {
   try {
-    // Get pagination parameters from query
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    // Fetch total number of users
     const totalUsers = await User.countDocuments();
-    // console.log("totalUsers", totalUsers);
-    
-    // Fetch paginated users
-    const users = await User.find()
-        .skip(skip)
-        .limit(limit)
-        .exec();
 
-    // Respond with paginated data
+    const users = await User.find()
+      .skip(skip)
+      .limit(limit)
+      .exec();
+
     res.json({
-        totalUsers,
-        users
+      totalUsers,
+      users
     });
-} catch (error) {
-    console.error('Error fetching users:', error);
+  } catch (error) {
     res.status(500).json({ message: 'Error fetching users', error });
-}
+  }
 };
 
 //update user
@@ -218,7 +194,7 @@ const deleteUser = async (req, res, next) => {
     }
     return res.status(200).json({
       success: true,
-      status:200,
+      status: 200,
       message: "User Deleted Successfully!"
     });
   } catch (error) {
@@ -384,75 +360,75 @@ const deleteAllUsers = async (req, res, next) => {
 // update-profile
 const updateProfile = async (req, res, next) => {
   try {
-      const { mobileNumber } = req.body;
-      const userId = req.params.userId; // Extract user ID from token
+    const { mobileNumber } = req.body;
+    const userId = req.params.userId; // Extract user ID from token
 
-      // Find user
-      const user = await User.findById(userId);
-      if (!user) {
-          return res.status(404).json({ success: false, message: 'User not found' });
+    // Find user
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Update user details
+    if (mobileNumber) user.mobileNumber = mobileNumber;
+
+    if (req.file) user.profileImage = req.file.path; // Update the profile image path
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: 'Profile updated successfully!',
+      data: {
+        userName: user.userName,
+        email: user.email,
+        mobileNumber: user.mobileNumber,
+        profileImage: user.profileImage
       }
-
-      // Update user details
-      if (mobileNumber) user.mobileNumber = mobileNumber;
-
-      if (req.file) user.profileImage = req.file.path; // Update the profile image path
-
-      await user.save();
-
-      return res.status(200).json({
-          success: true,
-          message: 'Profile updated successfully!',
-          data: {
-              userName: user.userName,
-              email: user.email,
-              mobileNumber: user.mobileNumber,
-              profileImage: user.profileImage
-          }
-      });
+    });
   } catch (error) {
-      return next(createError(500, "Something went wrong!"));
+    return next(createError(500, "Something went wrong!"));
   }
 };
 
 // change the password
 const changePassword = async (req, res, next) => {
   try {
-      const { oldPassword, newPassword } = req.body;
-      
-      // Validate input
-      if (!oldPassword || !newPassword) {
-          return next(createError(400, "Old password and new password are required"));
-      }
+    const { oldPassword, newPassword } = req.body;
 
-      // Get the user from the request
-      const id = req.user.id;
-      const user = await User.findById(id);
-      
-      // Verify the old password
-      const isMatch = await bcrypt.compare(oldPassword, user.password);
-      if (!isMatch) {
-          return next(createError(400, "Old password is incorrect"));
-      }
+    // Validate input
+    if (!oldPassword || !newPassword) {
+      return next(createError(400, "Old password and new password are required"));
+    }
 
-      // Hash the new password
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(newPassword, salt);
+    // Get the user from the request
+    const id = req.user.id;
+    const user = await User.findById(id);
 
-      // Update the user's password
-      user.password = hashedPassword;
-      await user.save();
+    // Verify the old password
+    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    if (!isMatch) {
+      return next(createError(400, "Old password is incorrect"));
+    }
 
-      // Respond with success message
-      return res.status(200).json({
-          success: true,
-          status: 200,
-          message: "Password changed successfully",
-      });
+    // Hash the new password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // Update the user's password
+    user.password = hashedPassword;
+    await user.save();
+
+    // Respond with success message
+    return res.status(200).json({
+      success: true,
+      status: 200,
+      message: "Password changed successfully",
+    });
   } catch (error) {
-      // Handle errors
-      console.error('Error changing password:', error);
-      return next(createError(500, "Something went wrong"));
+    // Handle errors
+    console.error('Error changing password:', error);
+    return next(createError(500, "Something went wrong"));
   }
 };
 
@@ -460,47 +436,47 @@ const changePassword = async (req, res, next) => {
 // Block a user
 const blockUser = async (req, res, next) => {
   try {
-      const { id } = req.params;
-      const user = await User.findById(id);
+    const { id } = req.params;
+    const user = await User.findById(id);
 
-      if (!user) {
-          return res.status(404).json({ 
-            success: false,
-            status: 404,
-            message: 'User not found'
-          });
-      }
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        status: 404,
+        message: 'User not found'
+      });
+    }
 
-      user.isBlocked = true;
-      await user.save();
+    user.isBlocked = true;
+    await user.save();
 
-      res.status(200).json({ 
-        success: true,
-        status: 200,
-        message: 'User blocked successfully!', 
-        data: user
-       });
+    res.status(200).json({
+      success: true,
+      status: 200,
+      message: 'User blocked successfully!',
+      data: user
+    });
   } catch (error) {
-      next(createError(500, 'Something went wrong'));
+    next(createError(500, 'Something went wrong'));
   }
 };
 
 // Unblock a user
 const unblockUser = async (req, res, next) => {
   try {
-      const { id } = req.params;
-      const user = await User.findById(id);
+    const { id } = req.params;
+    const user = await User.findById(id);
 
-      if (!user) {
-          return res.status(404).json({ success: false, message: 'User not found' });
-      }
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
-      user.isBlocked = false;
-      await user.save();
+    user.isBlocked = false;
+    await user.save();
 
-      res.status(200).json({ success: true, message: 'User unblocked successfully', data: user });
+    res.status(200).json({ success: true, message: 'User unblocked successfully', data: user });
   } catch (error) {
-      next(createError(500, 'Something went wrong'));
+    next(createError(500, 'Something went wrong'));
   }
 };
 
