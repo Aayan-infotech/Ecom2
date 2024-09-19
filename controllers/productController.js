@@ -8,7 +8,9 @@ const { v4: uuidv4 } = require('uuid');
 const validator = require('validator');
 const nodemailer = require('nodemailer');
 const Delivery = require('../models/deliverySlotModel')
-const { createNotification } = require('../services/notificationService')
+const { createNotification } = require('../services/notificationService');
+const { notification }=require('../controllers/notification')
+
 
 // add product
 const addProduct = async (req, res, next) => {
@@ -384,7 +386,7 @@ const createOrder = async (req, res, next) => {
 
         const user = await users.findById(userId);
 
-        // await sendOrderConfirmationEmail(user);
+        await sendOrderConfirmationEmail(user);
 
         const deliverySlotDoc = await Delivery.findById(deliverySlotId);
         if (!deliverySlotDoc) return next(createError(404, "Delivery slot not found!"));
@@ -403,6 +405,12 @@ const createOrder = async (req, res, next) => {
             timePeriod: trimmedTime
         }
         const newOrder = await saveOrder(userId, orderItems, totalWithDelivery, voucher, voucherUsed, orderId, deliveryDate, deliverySlot);
+
+        // Send notification
+        const title = 'Order Confirmation';
+        const body = `Hi ${user.userName}, your order with ID ${orderId} has been placed successfully. Total amount is $${totalWithDelivery}.`;
+        const deviceToken = user.deviceToken; // Ensure user has deviceToken field
+        await notification(userId, title, body, deviceToken);
 
         return res.status(201).json({
             success: true,
