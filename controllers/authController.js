@@ -13,7 +13,7 @@ const login = async (req, res, next) => {
     const { emailOrUsername, password, deviceToken } = req.body;
     
     // Validate input
-    if (!emailOrUsername || !password || !deviceToken) {
+    if (!emailOrUsername || !password) {
       return next(createError(400, "Email/Username, password or device token are required"));
     }
 

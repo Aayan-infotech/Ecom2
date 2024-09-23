@@ -52,7 +52,7 @@ const register = async (req, res, next) => {
     await newUser.save();
     const title = 'Welcome to this App';
     const body = `Congratulations, ${userName}! Your registration is complete. We're excited to have you on board.`;
-    await notification(title,body,deviceToken)
+    await notification( title, body, deviceToken )
     await createNotification('new_user', `${newUser.userName} has signed up.`);
 
     return res.status(201).json({
@@ -83,6 +83,8 @@ const getAllUsers = async (req, res, next) => {
       .exec();
 
     res.json({
+      status: 200,
+      message: "Users are fetched successfully!",
       totalUsers,
       users
     });
