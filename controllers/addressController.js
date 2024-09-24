@@ -37,10 +37,50 @@ const addAddress = async (req, res, next) => {
 };
 
 // get address by user id
+// const getAddressByUserId = async (req, res, next) => {
+//     try {
+//         const { userId } = req.params;
+
+//         const addresses = await Address.find({ user: userId });
+
+//         if (!addresses.length) {
+//             return next(createError(404, "No addresses found for this user!"));
+//         }
+
+//         return res.status(200).json({
+//             success: true,
+//             status: 200,
+//             message: "Address retrieved successfully!",
+//             data: addresses
+//         })
+
+//     }
+//     catch (error) {
+//         return next(createError(500, "Something went wrong!"));
+//     }
+// };
+
 const getAddressByUserId = async (req, res, next) => {
     try {
-        const { userId } = req.params;
+        let userId;
 
+        // Extract the token from cookies
+        const token = req.cookies.access_token;
+
+        if (token) {
+            // Verify the token if it's available
+            const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
+            const decoded = jwt.verify(token, jwtSecret);
+            userId = decoded.id; // Get the user ID from the token
+        } else if (req.body.userId || req.params.userId) {
+            // Fallback to using userId from request body or params if token is not present
+            userId = req.body.userId || req.params.userId;
+        } else {
+            // If neither token nor userId is available, return an error
+            return next(createError(401, "Access token or userId is missing!"));
+        }
+
+        // Fetch addresses by user ID
         const addresses = await Address.find({ user: userId });
 
         if (!addresses.length) {
@@ -50,15 +90,18 @@ const getAddressByUserId = async (req, res, next) => {
         return res.status(200).json({
             success: true,
             status: 200,
-            message: "Address retrieved successfully!",
+            message: "Addresses retrieved successfully!",
             data: addresses
-        })
-
-    }
-    catch (error) {
+        });
+    } catch (error) {
+        // Handle unexpected errors
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+            return next(createError(401, "Invalid or expired token!"));
+        }
         return next(createError(500, "Something went wrong!"));
     }
 };
+
 
 // Update address
 const updateAddress = async (req, res, next) => {

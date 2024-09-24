@@ -37,7 +37,8 @@ const addProduct = async (req, res, next) => {
             price,
             stock,
             image,
-            discount
+            discount,
+            isHighlight
         });
 
         await newProduct.save();
@@ -71,6 +72,25 @@ const getAllProduct = async (req, res, next) => {
         return next(createError(500, "Something went wrong!"));
     }
 };
+
+// get products having discount
+const getAllProductDiscount = async (req, res, next) => {
+    try {
+        // Find products where discount is greater than 0
+        const products = await Product.find({ discount: { $gt: 0 } });
+
+        return res.status(200).json({
+            success: true,
+            status: 200,
+            message: "All Products with discount greater than 0 received successfully!",
+            data: products
+        });
+    }
+    catch (error) {
+        return next(createError(500, "Something went wrong!"));
+    }
+};
+
 
 // get product by id
 const getProductById = async (req, res, next) => {
@@ -176,7 +196,7 @@ const deleteProduct = async (req, res, next) => {
 const updateProduct = async (req, res, next) => {
     try {
         const { id } = req.params;
-        const { name, price, description, subcategory, image, stock, category } = req.body;
+        const { name, price, description, subcategory, image, stock, category, isHighlight } = req.body;
 
         if (!name || !price || !subcategory || !stock) {
             return next(createError(400, "Name, Price, Subcategory and stock are required!"));
@@ -195,6 +215,7 @@ const updateProduct = async (req, res, next) => {
         existingProduct.image = image;
         existingProduct.stock = stock;
         existingProduct.category = category;
+        existingProduct.isHighlight = isHighlight;
 
 
         // Save the updated product
@@ -1005,6 +1026,7 @@ const getRecommendationByMonth = async (req, res) => {
 module.exports = {
     addProduct,
     getAllProduct,
+    getAllProductDiscount,
     getProductById,
     getProductsBySubcategoryId,
     deleteProduct,

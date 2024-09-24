@@ -15,9 +15,9 @@ const {
 
 const router = express.Router();
 
-router.post('/add', addToCart);
-router.delete('/delete', removeFromCart);
-router.get('/get/:userId', getCart);
+router.post('/add', verifyToken, addToCart);
+router.delete('/delete/:userId/:productId', removeFromCart);
+router.get('/get', verifyToken, getCart);
 router.put('/increase', increaseQuantity);
 router.put('/decrease', decreaseQuantity);
 router.put('/update/:id', updateQuantity)

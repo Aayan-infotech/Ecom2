@@ -1,6 +1,53 @@
 const Cart = require("../models/cartModel");
 const createError = require("../middleware/error");
 const Product = require("../models/productModel");
+const jwt = require('jsonwebtoken');
+
+const getCart = async (req, res, next) => {
+    try {
+        let userId;
+
+        // Extract the token from cookies
+        const token = req.cookies.access_token;
+
+        if (token) {
+            // Verify the token if it's available
+            const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
+            const decoded = jwt.verify(token, jwtSecret);
+            console.log("decoded", decoded);
+            
+            userId = decoded.id; // Get the user ID from the token
+        } else if (req.body.userId || req.params.userId) {
+            // Fallback to using userId from request body or params if token is not present
+            userId = req.body.userId || req.params.userId;
+        } else {
+            // If neither token nor userId is available, return an error
+            return next(createError(401, "Access token or userId is missing!"));
+        }
+
+        // Fetch the cart for the user ID
+        const cart = await Cart.findOne({ user: userId }).populate('products.product');
+
+        if (!cart) {
+            return next(createError(404, "Cart not found!"));
+        }
+
+        return res.status(200).json({
+            success: true,
+            status: 200,
+            message: "Cart fetched successfully!",
+            data: cart
+        });
+    } catch (error) {
+        // Handle token errors or other unexpected issues
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+            return next(createError(401, "Invalid or expired token!"));
+        }
+        return next(createError(500, "Something went wrong!"));
+    }
+};
+
+
 
 // add to cart
 const addToCart = async (req, res, next) => {
@@ -51,7 +98,7 @@ const addToCart = async (req, res, next) => {
 // remove from cart
 const removeFromCart = async (req, res, next) => {
     try {
-        const { userId, productId } = req.body;
+        const { userId, productId } = req.params;
 
         let cart = await Cart.findOne({ user: userId });
 
@@ -76,27 +123,27 @@ const removeFromCart = async (req, res, next) => {
 };
 
 // get cart details
-const getCart = async (req, res, next) => {
-    try {
-        const { userId } = req.params;
+// const getCart = async (req, res, next) => {
+//     try {
+//         const { userId } = req.params;
 
-        const cart = await Cart.findOne({ user: userId }).populate('products.product');
+//         const cart = await Cart.findOne({ user: userId }).populate('products.product');
 
-        if (!cart) {
-            return next(createError(404, "Cart not found!"));
-        }
+//         if (!cart) {
+//             return next(createError(404, "Cart not found!"));
+//         }
 
-        return res.status(200).json({
-            success: true,
-            status: 200,
-            message: "Cart fetched successfully!",
-            data: cart
-        });
-    }
-    catch (error) {
-        return next(createError(500, "Something went wrong!"));
-    }
-};
+//         return res.status(200).json({
+//             success: true,
+//             status: 200,
+//             message: "Cart fetched successfully!",
+//             data: cart
+//         });
+//     }
+//     catch (error) {
+//         return next(createError(500, "Something went wrong!"));
+//     }
+// };
 
 // to increase quantity
 const increaseQuantity = async(req, res, next) => {

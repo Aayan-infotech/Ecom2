@@ -78,7 +78,9 @@ app.use('/api/invoices', invoiceRoute);
 app.use('/api/notification', notificationRoute);
 app.use('/api/payment', paymentRoute);
 
-
+app.get('/', (req, res) => {
+    res.send("Congratulations! It's working");
+  });
 
 
 
