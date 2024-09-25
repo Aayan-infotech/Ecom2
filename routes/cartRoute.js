@@ -4,8 +4,7 @@ const {
     addToCart,
     removeFromCart,
     getCart,
-    increaseQuantity,
-    decreaseQuantity,
+    changeQuantity,
     updateQuantity
 } = require("../controllers/cartController");
 
@@ -15,12 +14,11 @@ const {
 
 const router = express.Router();
 
-router.post('/add', verifyToken, addToCart);
-router.delete('/delete/:userId/:productId', removeFromCart);
+router.post('/add', addToCart);
+router.delete('/delete/:productId', verifyToken, removeFromCart);
 router.get('/get', verifyToken, getCart);
-router.put('/increase', increaseQuantity);
-router.put('/decrease', decreaseQuantity);
-router.put('/update/:id', updateQuantity)
+router.put('/change', changeQuantity);
+router.put('/update/:id', updateQuantity);
 
 
 module.exports = router;

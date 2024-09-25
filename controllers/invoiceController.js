@@ -7,18 +7,23 @@ const User = require('../models/userModel')
 
 exports.generateInvoice = async (req, res) => {
     try {
-        // Create the invoice
-        const invoice = await InvoiceService.createInvoice(req.params.orderId);
+        const order = await Order.findById(req.params.orderId);
+        if (order.invoiceNumber) {
+            // If the invoice has already been generated, return it
+            return res.status(200).json({ invoiceNumber: order.invoiceNumber });
+        }
 
-        // Optionally, generate a PDF (if needed)
-        // const pdfData = await createPDF(invoice);
+        // Logic to generate a new invoice
+        const newInvoiceNumber = generateInvoiceNumber(); // This is your logic to generate an invoice number
+        order.invoiceNumber = newInvoiceNumber;
+        await order.save();
 
-        // Send the invoice data as response
-        res.status(201).json(invoice);
+        res.status(200).json({ invoiceNumber: newInvoiceNumber });
     } catch (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: 'Error generating invoice' });
     }
 };
+
 
 exports.getInvoice = async (req, res) => {
     try {

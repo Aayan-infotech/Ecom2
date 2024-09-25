@@ -8,13 +8,13 @@ const getCart = async (req, res, next) => {
         let userId;
 
         // Extract the token from cookies
-        const token = req.cookies.access_token;
+        const token = req.headers['authorization']?.split(' ')[1];
 
         if (token) {
             // Verify the token if it's available
             const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
             const decoded = jwt.verify(token, jwtSecret);
-            console.log("decoded", decoded);
+            // console.log("decoded", decoded);
             
             userId = decoded.id; // Get the user ID from the token
         } else if (req.body.userId || req.params.userId) {
@@ -98,29 +98,45 @@ const addToCart = async (req, res, next) => {
 // remove from cart
 const removeFromCart = async (req, res, next) => {
     try {
-        const { userId, productId } = req.params;
+        const token = req.headers.authorization.split(' ')[1];  // Assuming the token is sent as "Bearer <token>"
+        
+        if (!token) {
+            return next(createError(401, "Access Denied! No token provided."));
+        }
 
+        // Verify the token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);  // Assuming you are using JWT and have the secret stored in environment variables
+        const userId = decoded.id;  // Assuming the token contains the user ID as 'id'
+
+        const { productId } = req.params;
+
+        // Find the cart for the authenticated user
         let cart = await Cart.findOne({ user: userId });
 
         if (!cart) {
             return next(createError(404, "No Cart Found!"));
         }
 
+        // Remove the product from the cart
         cart.products = cart.products.filter(p => p.product.toString() !== productId);
 
+        // Save the updated cart
         await cart.save();
 
         return res.status(200).json({
             success: true,
             status: 200,
-            message: "Product removed from cart Successfully!",
-            data: cart
+            message: "Product removed from cart successfully!"
         });
     }
     catch (error) {
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+            return next(createError(401, "Invalid or Expired Token!"));
+        }
         return next(createError(500, "Something went wrong!"));
     }
 };
+
 
 // get cart details
 // const getCart = async (req, res, next) => {
@@ -145,21 +161,19 @@ const removeFromCart = async (req, res, next) => {
 //     }
 // };
 
-// to increase quantity
-const increaseQuantity = async(req, res, next) => {
-    try{
-        const { userId, productId } = req.body
+const changeQuantity = async(req, res, next) => {
+    try {
+        const { userId, productId, operation } = req.body; // operation: 'increase' or 'decrease'
 
-        const cart = await Cart.findOne({user: userId});
-        if(!cart){
+        const cart = await Cart.findOne({ user: userId });
+        if (!cart) {
             return next(createError(404, "Cart not found!"));
         }
 
-        // find the item in the cart to update
+        // Find the item in the cart
         const cartItem = cart.products.find(item => item.product.toString() === productId.toString());
-
-        if(!cartItem){
-           return next(createError(404, "Product not found in cart!"));            
+        if (!cartItem) {
+            return next(createError(404, "Product not found in cart!"));
         }
 
         const product = await Product.findById(productId);
@@ -167,74 +181,40 @@ const increaseQuantity = async(req, res, next) => {
             return next(createError(404, "Product not found!"));
         }
 
-
-        if(product.stock < (cartItem.quantity + 1)){
-            return next(createError(400, "Not enough stock available!"));
+        // Increase quantity operation
+        if (operation === 'increase') {
+            if (product.stock < (cartItem.quantity + 1)) {
+                return next(createError(400, "Not enough stock available!"));
+            }
+            cartItem.quantity += 1;
         }
 
-        cartItem.quantity += 1;
+        // Decrease quantity operation
+        else if (operation === 'decrease') {
+            if (cartItem.quantity > 1) {
+                cartItem.quantity -= 1;
+            } else {
+                return next(createError(400, "Quantity cannot be decreased further!"));
+            }
+        } else {
+            return next(createError(400, "Invalid operation!"));
+        }
 
+        // Save the updated cart
         await cart.save();
 
         return res.status(200).json({
             success: true,
             status: 200,
-            message: "Quantity updated by 1 successully!",
+            message: `Quantity ${operation}d successfully!`,
             data: cart
-        })
-
-    }
-    catch(error){
-        return next(createError(500, "Something went wrong!"))
+        });
+    } catch (error) {
+        console.log("error", error);
+        return next(createError(500, "Something went wrong!"));
     }
 };
 
-
-// to descrease quantity
-const decreaseQuantity = async(req, res, next) => {
-    try{
-        const { userId, productId } = req.body
-
-        const cart = await Cart.findOne({user: userId});
-        if(!cart){
-            return next(createError(404, "Cart not found!"));
-        }
-
-        // find the item in the cart to update
-        const cartItem = cart.products.find(item => item.product.toString() === productId.toString());
-
-        if(!cartItem){
-           return next(createError(404, "Product not found in cart!"));            
-        }
-
-        const product = await Product.findById(productId);
-        if (!product) {
-            return next(createError(404, "Product not found!"));
-        }
-
-
-        if(product.stock == 0){
-            return next(createError(400, "Not enough stock available!"));
-        }
-
-        if(cartItem.quantity > 1){
-            cartItem.quantity -= 1;
-        }
-
-        await cart.save();
-
-        return res.status(200).json({
-            success: true,
-            status: 200,
-            message: "Quantity decreased by 1 successully!",
-            data: cart
-        })
-
-    }
-    catch(error){
-        return next(createError(500, "Something went wrong!"))
-    }
-};
 
 // to update the quantity as it is
 const updateQuantity = async(req, res, next) => {
@@ -278,7 +258,6 @@ module.exports = {
     addToCart,
     removeFromCart,
     getCart,
-    increaseQuantity,
-    decreaseQuantity,
+    changeQuantity,
     updateQuantity
 }

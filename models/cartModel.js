@@ -19,7 +19,11 @@ const CartSchema = new Schema({
                 required: true
             }
         }
-    ]
+    ],
+    operation: {
+        type: String,
+        required: false
+    }
 },
 {
     timestamps: true

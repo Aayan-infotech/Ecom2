@@ -65,7 +65,7 @@ const getAddressByUserId = async (req, res, next) => {
         let userId;
 
         // Extract the token from cookies
-        const token = req.cookies.access_token;
+        const token = req.headers['authorization']?.split(' ')[1];
 
         if (token) {
             // Verify the token if it's available
