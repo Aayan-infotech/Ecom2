@@ -9,11 +9,14 @@ const {
 } = require("../controllers/addressController");
 
 
-//
+const {
+    verifyToken
+} = require("../middleware/verifyToken");
+
 const router = express.Router();
 
 router.post('/add', addAddress);
-router.get('/get', verifyToken, getAddressByUserId);
+router.get('/get', getAddressByUserId);
 router.put('/update/:addressId', updateAddress);
 router.put('/select', selectAddress);
 router.delete('/delete/:id', deleteAddress);
