@@ -56,6 +56,10 @@ const orderSchema = new Schema({
     trackingNumber: {
         type: String,
         required: false
+    },
+    address: {
+        type: String,
+        required: false
     }
 },
     {

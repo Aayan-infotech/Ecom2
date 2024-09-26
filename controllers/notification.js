@@ -36,20 +36,20 @@ const notification = async (title, body,deviceToken)=>{
   }
 };
 
-const getNotification=async(req,res)=>{
-  try{
-    const result=await notificationModel.find({userId:req.params.id})
-    res.json({
-      status:200,
-      msg:"Get all notification",
-      data:result
-    })
-  }catch(error){
-    res.status(500).json({
-      status: 500,
-      error: error.message
-    });
-  }
-}
+// const getNotification=async(req,res)=>{
+//   try{
+//     const result=await notificationModel.find({userId:req.params.id})
+//     res.json({
+//       status:200,
+//       msg:"Get all notification",
+//       data:result
+//     })
+//   }catch(error){
+//     res.status(500).json({
+//       status: 500,
+//       error: error.message
+//     });
+//   }
+// }
 
-module.exports={notification,getNotification}
+module.exports={notification}

@@ -9,7 +9,8 @@ const validator = require('validator');
 const nodemailer = require('nodemailer');
 const Delivery = require('../models/deliverySlotModel')
 const { createNotification } = require('../services/notificationService');
-const { notification }=require('../controllers/notification')
+const Address = require('../models/addressModel')
+const { notification } = require('../controllers/notification')
 
 
 // add product
@@ -145,28 +146,28 @@ const getProductsBySubcategoryId = async (req, res, next) => {
 };
 
 // fetch product by category
-const getProductByCategoryId = async(req, res, next) => {
-    try{
-    const { categoryId } = req.params;
+const getProductByCategoryId = async (req, res, next) => {
+    try {
+        const { categoryId } = req.params;
 
-    if(!categoryId){
-        return next(createError(400, "Enter the category id!"));
+        if (!categoryId) {
+            return next(createError(400, "Enter the category id!"));
+        }
+
+        const products = await Product.find({ category: categoryId });
+
+        // if(products.length === 0){
+        //     return next(createError(404, "Products does not exist!"));
+        // }
+
+        return res.status(200).json({
+            success: true,
+            status: 200,
+            message: "Products fetched by category!",
+            data: products
+        });
     }
-
-    const products = await Product.find({category: categoryId});
-
-    // if(products.length === 0){
-    //     return next(createError(404, "Products does not exist!"));
-    // }
-
-    return res.status(200).json({
-        success: true,
-        status: 200,
-        message: "Products fetched by category!",
-        data: products
-    });
-    }
-    catch(error){
+    catch (error) {
         console.error("Error fetching the category", error);
         return next(createError(500, "Something went wrong!"));
     }
@@ -387,11 +388,21 @@ const searchProduct = async (req, res, next) => {
 // create order
 const createOrder = async (req, res, next) => {
     try {
-        const { userId, voucherCode, deliverySlotId } = req.body;
+        const { userId, voucherCode, deliverySlotId, addressId } = req.body;
 
-        // Validate the address
-        const addressIsValid = await validateAddress(userId, address);
-        if (!addressIsValid) return next(createError(400, "Invalid address!"));
+        // Validate the address by addressId
+        // const addressIsValid = await validateAddress(userId, addressId);
+        // if (!addressIsValid) return next(createError(400, "Invalid address!"));
+
+        const address = await Address.findById(addressId);
+        console.log("address", address);
+
+        // Check if the address exists and if the user ID matches
+        if (!address || address.user.toString() !== userId) {
+            return next(createError(400, "Invalid address!"));
+        }
+
+
 
         const cart = await findCart(userId);
         if (!cart) return next(createError(404, "Cart not found!"));
@@ -440,7 +451,7 @@ const createOrder = async (req, res, next) => {
             orderId,
             deliveryDate,
             deliverySlot,
-            address
+            addressId
         );
 
         // Send notification
@@ -576,7 +587,7 @@ const sendOrderConfirmationEmail = async (user) => {
     await sendEmail(user.email, subject, text);
 };
 
-const saveOrder = async (userId, orderItems, totalAmount, voucher, voucherUsed, orderId, deliveryDate, deliverySlot) => {
+const saveOrder = async (userId, orderItems, totalAmount, voucher, voucherUsed, orderId, deliveryDate, deliverySlot, addressId) => {
     const newOrder = new Order({
         user: userId,
         items: orderItems,
@@ -585,7 +596,8 @@ const saveOrder = async (userId, orderItems, totalAmount, voucher, voucherUsed, 
         voucherUsed: voucherUsed,
         orderId: orderId,
         expectedDeliveryDate: deliveryDate,
-        deliverySlot
+        deliverySlot,
+        address: addressId
     });
     return await newOrder.save();
 };
@@ -620,24 +632,82 @@ const sendEmail = async (to, subject, text) => {
     }
 };
 
-const validateAddress = async (userId, providedAddress) => {
+// const validateAddress = async (userId, addressId) => {
+//     try {
+//         // Find the user by userId
+//         const user = await users.findById(userId);
+//         if (!user) throw new Error('User not found!');
+
+//         // Check if the addressId exists in the user's addresses array
+//         const addressExists = user.Address.some(address => address._id.toString() === addressId);
+
+//         return addressExists;
+//     } catch (error) {
+//         console.error('Error validating address:', error);
+//         throw new Error('Address validation failed!');
+//     }
+// };
+const getOrderSummary = async (req, res, next) => {
     try {
-        const user = await users.findById(userId);
-        if (!user) throw new Error('User not found!');
+        const { orderId } = req.params;
 
-        // Assuming user.addresses is an array of address objects in your user schema
-        const addressExists = user.addresses.some(address => {
-            return address.houseNumber === providedAddress.houseNumber &&
-                   address.street === providedAddress.street &&
-                   address.city === providedAddress.city &&
-                   address.state === providedAddress.state &&
-                   address.pinCode === providedAddress.pinCode;
+        // Fetch the order without populate
+        const order = await Order.findOne({ orderId });
+        if (!order) {
+            return next(createError(404, 'Order not found!'));
+        }
+
+        // Fetch user data manually
+        const user = await users.findById(order.user).select('userName email');
+
+        // Fetch order items and product details manually
+        const orderItems = await Promise.all(
+            order.items.map(async (item) => {
+                const product = await Product.findById(item.product).select('name price');
+                return {
+                    product: product.name,
+                    price: product.price,
+                    quantity: item.quantity
+                };
+            })
+        );
+
+        // Fetch voucher details manually (if used)
+        let voucher = null;
+        if (order.voucher) {
+            const voucherDoc = await Voucher.findById(order.voucher).select('code discount');
+            voucher = {
+                code: voucherDoc.code,
+                discount: voucherDoc.discount
+            };
+        }
+
+        // Prepare the order summary response
+        const orderSummary = {
+            orderId: order.orderId,
+            user: {
+                userName: user.userName,
+                email: user.email
+            },
+            items: orderItems,
+            totalAmount: order.totalAmount,
+            voucherUsed: order.voucherUsed,
+            voucher: voucher,
+            status: order.status,
+            deliverySlot: order.deliverySlot,
+            address: order.address,
+            expectedDeliveryDate: order.expectedDeliveryDate
+        };
+
+        // Send the order summary
+        return res.status(200).json({
+            success: true,
+            message: 'Order summary fetched successfully!',
+            data: orderSummary
         });
-
-        return addressExists;
     } catch (error) {
-        console.error('Error validating address:', error);
-        throw new Error('Address validation failed!');
+        console.error('Error fetching order summary:', error);
+        return next(createError(500, 'Something went wrong!'));
     }
 };
 
@@ -878,7 +948,7 @@ const getProductFrequency = async (req, res, next) => {
         // Fetch the product frequency by month from the updated function
         const monthlyProductFrequency = await calculateProductFrequencyFromOrders();
         console.log("Monthly Product Frequency:", monthlyProductFrequency);
-        
+
         // Return the result in the API response
         return res.status(200).json({
             success: true,
@@ -938,26 +1008,26 @@ const getOrderHistory = async (req, res, next) => {
 
 
 // get order by id
-const getOrderById = async (req, res) => {
-    const { orderId } = req.params; // Extract the orderId from request parameters
-    try {
-        const order = await Order.findById(orderId); // Find order by its ID
-        if (!order) {
-            return res.status(404).json({ message: 'Order not found' });
-        }
+// const getOrderById = async (req, res) => {
+//     const { orderId } = req.params; // Extract the orderId from request parameters
+//     try {
+//         const order = await Order.findById(orderId); // Find order by its ID
+//         if (!order) {
+//             return res.status(404).json({ message: 'Order not found' });
+//         }
 
-        const user = await users.findById(order.user); // Find the user associated with the order
+//         const user = await users.findById(order.user); // Find the user associated with the order
 
-        const orderWithUserDetails = {
-            ...order.toObject(),
-            userName: user ? user.userName : 'No Name'
-        };
+//         const orderWithUserDetails = {
+//             ...order.toObject(),
+//             userName: user ? user.userName : 'No Name'
+//         };
 
-        res.json({ data: orderWithUserDetails });
-    } catch (error) {
-        res.status(500).json({ message: error.message });
-    }
-};
+//         res.json({ data: orderWithUserDetails });
+//     } catch (error) {
+//         res.status(500).json({ message: error.message });
+//     }
+// };
 
 const handleImportProducts = async () => {
     if (!importFile) return;
@@ -1102,5 +1172,6 @@ module.exports = {
     getRecommendations,
     getRecommendationByMonth,
     getProductByCategoryId,
-    getProductFrequency
+    getProductFrequency,
+    getOrderSummary
 };

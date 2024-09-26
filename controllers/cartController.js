@@ -98,15 +98,25 @@ const addToCart = async (req, res, next) => {
 // remove from cart
 const removeFromCart = async (req, res, next) => {
     try {
-        const token = req.headers.authorization.split(' ')[1];  // Assuming the token is sent as "Bearer <token>"
-        
-        if (!token) {
-            return next(createError(401, "Access Denied! No token provided."));
-        }
+        let userId;
 
-        // Verify the token
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);  // Assuming you are using JWT and have the secret stored in environment variables
-        const userId = decoded.id;  // Assuming the token contains the user ID as 'id'
+        // Check if authorization header with a Bearer token is provided
+        if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
+            const token = req.headers.authorization.split(' ')[1];
+
+            if (!token) {
+                return next(createError(401, "Access Denied! No token provided."));
+            }
+
+            // Verify the token
+            const decoded = jwt.verify(token, process.env.JWT_SECRET);
+            userId = decoded.id;  // Assuming the token contains the user ID as 'id'
+        } else if (req.body.userId) {
+            // Fallback to userId from the request body if no token is provided
+            userId = req.body.userId;
+        } else {
+            return next(createError(400, "User ID is required either in the token or request body."));
+        }
 
         const { productId } = req.params;
 
@@ -136,6 +146,7 @@ const removeFromCart = async (req, res, next) => {
         return next(createError(500, "Something went wrong!"));
     }
 };
+
 
 
 // get cart details
