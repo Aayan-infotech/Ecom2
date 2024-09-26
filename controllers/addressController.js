@@ -1,6 +1,7 @@
 const Address = require('../models/addressModel');
 const User = require('../models/userModel');
 const createError = require('../middleware/error');
+const jwt = require('jsonwebtoken');
 
 const addAddress = async (req, res, next) => {
     try {
@@ -98,6 +99,7 @@ const getAddressByUserId = async (req, res, next) => {
         if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
             return next(createError(401, "Invalid or expired token!"));
         }
+        console.error("error", error)
         return next(createError(500, "Something went wrong!"));
     }
 };
