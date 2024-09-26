@@ -11,7 +11,7 @@ const {
 const router = express.Router();
 
 router.post('/add', addAddress);
-router.get('/get/:userId', getAddressByUserId);
+router.get('/get', verifyToken, getAddressByUserId);
 router.put('/update/:addressId', updateAddress);
 router.put('/select', selectAddress);
 router.delete('/delete/:id', deleteAddress);

@@ -383,9 +383,15 @@ const searchProduct = async (req, res, next) => {
 //         return next(createError(500, "Something went wrong!"));
 //     }
 // };
+
+// create order
 const createOrder = async (req, res, next) => {
     try {
         const { userId, voucherCode, deliverySlotId } = req.body;
+
+        // Validate the address
+        const addressIsValid = await validateAddress(userId, address);
+        if (!addressIsValid) return next(createError(400, "Invalid address!"));
 
         const cart = await findCart(userId);
         if (!cart) return next(createError(404, "Cart not found!"));
@@ -425,7 +431,17 @@ const createOrder = async (req, res, next) => {
             date: trimmedDate,
             timePeriod: trimmedTime
         }
-        const newOrder = await saveOrder(userId, orderItems, totalWithDelivery, voucher, voucherUsed, orderId, deliveryDate, deliverySlot);
+        const newOrder = await saveOrder(
+            userId,
+            orderItems,
+            totalWithDelivery,
+            voucher,
+            voucherUsed,
+            orderId,
+            deliveryDate,
+            deliverySlot,
+            address
+        );
 
         // Send notification
         const title = 'Order Confirmation';
@@ -603,6 +619,28 @@ const sendEmail = async (to, subject, text) => {
         throw error;
     }
 };
+
+const validateAddress = async (userId, providedAddress) => {
+    try {
+        const user = await users.findById(userId);
+        if (!user) throw new Error('User not found!');
+
+        // Assuming user.addresses is an array of address objects in your user schema
+        const addressExists = user.addresses.some(address => {
+            return address.houseNumber === providedAddress.houseNumber &&
+                   address.street === providedAddress.street &&
+                   address.city === providedAddress.city &&
+                   address.state === providedAddress.state &&
+                   address.pinCode === providedAddress.pinCode;
+        });
+
+        return addressExists;
+    } catch (error) {
+        console.error('Error validating address:', error);
+        throw new Error('Address validation failed!');
+    }
+};
+
 
 const getOrders = async (req, res) => {
     try {
@@ -790,52 +828,50 @@ const declineOrder = async (req, res, next) => {
 };
 
 const calculateProductFrequencyFromOrders = async () => {
-    try {
-        const orders = await Order.find(); // Fetch all orders from the database
-        console.log("orders", orders);
+    // Fetch all orders and populate the `items` field (assuming `items` is an array of product references)
+    const orders = await Order.find({}).populate('items'); // Assuming `items` field has product details
 
-        const monthlyProductFrequency = {}; // Object to hold frequencies by month
+    // Create an object to store the frequency of products per month
+    const monthlyProductFrequency = {};
 
-        // Traverse through all orders
-        orders.forEach(order => {
-            // Ensure items is an array before proceeding
-            if (Array.isArray(order.items) && order.items.length > 0) {
-                // Extract month and year from orderDate
-                const orderDate = new Date(order.orderDate);
-                const monthYear = `${orderDate.getFullYear()}-${orderDate.getMonth() + 1}`; // Format: YYYY-M
+    // Iterate through each order
+    orders.forEach(order => {
+        // Extract the month and year from the order's createdAt timestamp
+        const orderDate = new Date(order.createdAt); // Assuming `createdAt` is the order date field
+        const month = orderDate.getMonth(); // 0 for January, 1 for February, etc.
+        const year = orderDate.getFullYear(); // Extract the year as well
+        const monthYear = `${month + 1}-${year}`; // e.g., "7-2023" for July 2023
 
-                // Initialize the month if it doesn't exist
-                if (!monthlyProductFrequency[monthYear]) {
-                    monthlyProductFrequency[monthYear] = {};
-                }
+        // Initialize monthYear in the object if not already there
+        if (!monthlyProductFrequency[monthYear]) {
+            monthlyProductFrequency[monthYear] = {};
+        }
 
-                order.items.forEach(item => {
-                    const productId = item.product.toString(); // Ensure productId is a string
-                    if (monthlyProductFrequency[monthYear][productId]) {
-                        monthlyProductFrequency[monthYear][productId] += item.quantity; // Add to existing quantity
-                    } else {
-                        monthlyProductFrequency[monthYear][productId] = item.quantity; // Initialize with current quantity
+        // Loop through products in the order
+        order.items.forEach(product => {
+            const productName = product.name;
+
+            // Check if product exists in the current monthYear, if not, initialize it
+            if (!monthlyProductFrequency[monthYear][productName]) {
+                monthlyProductFrequency[monthYear][productName] = {
+                    frequency: 0,
+                    details: {
+                        name: product.name,
+                        price: product.price, // assuming `price` field exists
+                        // description: product.description, // any other product information you want to include
+                        // category: product.category, // assuming `category` field exists
+
                     }
-                });
+                };
             }
-        });
 
-        // Convert monthlyProductFrequency object to array and sort by month
-        const sortedMonthlyFrequencies = Object.entries(monthlyProductFrequency).map(([monthYear, productFrequency]) => {
-            const sortedProducts = Object.entries(productFrequency).sort((a, b) => b[1] - a[1]);
-            return { monthYear, sortedProducts };
+            // Increment the frequency of this product for the month
+            monthlyProductFrequency[monthYear][productName].frequency++;
         });
+    });
 
-        // Logging or returning the sorted result
-        console.log("Sorted Monthly Product Frequency:", sortedMonthlyFrequencies);
-        return sortedMonthlyFrequencies; // You can return or process this data further
-    } catch (error) {
-        console.error('Error calculating product frequency:', error);
-        throw new Error("Failed to calculate product frequency!");
-    }
+    return monthlyProductFrequency;
 };
-
-
 
 const getProductFrequency = async (req, res, next) => {
     try {
@@ -857,9 +893,6 @@ const getProductFrequency = async (req, res, next) => {
     }
 };
 
-
-
-
 // Export Order Details
 // const exportOrders = async (req, res, next) => {
 //     try {
@@ -875,6 +908,8 @@ const getProductFrequency = async (req, res, next) => {
 //         return next(createError(500, "Something went wrong!"));
 //     }
 // };
+
+
 
 // get order history
 const getOrderHistory = async (req, res, next) => {
@@ -898,6 +933,29 @@ const getOrderHistory = async (req, res, next) => {
     }
     catch (error) {
         return next(createError(500, "Something went wrong!"));
+    }
+};
+
+
+// get order by id
+const getOrderById = async (req, res) => {
+    const { orderId } = req.params; // Extract the orderId from request parameters
+    try {
+        const order = await Order.findById(orderId); // Find order by its ID
+        if (!order) {
+            return res.status(404).json({ message: 'Order not found' });
+        }
+
+        const user = await users.findById(order.user); // Find the user associated with the order
+
+        const orderWithUserDetails = {
+            ...order.toObject(),
+            userName: user ? user.userName : 'No Name'
+        };
+
+        res.json({ data: orderWithUserDetails });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
 };
 
