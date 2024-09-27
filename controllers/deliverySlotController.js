@@ -42,21 +42,34 @@ const addDeliverySlot = async(req, res, next) => {
 };
 
 // get all delivery slot
-const getDeliverySlots = async(req, res, next) => {
-    try{
-        const slots = await DeliverySlot.find();
+const getDeliverySlots = async (req, res, next) => {
+    try {
+        const page = parseInt(req.query.page) || 1;  // Default to page 1 if not provided
+        const limit = parseInt(req.query.limit) || 10;  // Default to 10 slots per page
+        const skip = (page - 1) * limit;  // Calculate the number of documents to skip
+
+        // Fetch the total count of delivery slots (without pagination)
+        const totalSlots = await DeliverySlot.countDocuments();
+
+        // Fetch the paginated delivery slots
+        const slots = await DeliverySlot.find()
+            .skip(skip)
+            .limit(limit);
 
         return res.status(200).json({
             success: true,
             status: 200,
             message: "Delivery slots retrieved successfully!",
+            totalSlots,  // Send total number of slots (for frontend to calculate total pages)
+            currentPage: page,
+            totalPages: Math.ceil(totalSlots / limit),  // Calculate the total number of pages
             data: slots
         });
-    }
-    catch(error){
+    } catch (error) {
         return next(createError(500, "Something went wrong!"));
     }
 };
+
 
 // get delivery slots by date
 const getDeliverySlotsByDeliveryDate = async(req, res, next) => {

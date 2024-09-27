@@ -60,19 +60,38 @@ const addProduct = async (req, res, next) => {
 // get Products
 const getAllProduct = async (req, res, next) => {
     try {
-        const products = await Product.find().populate('subcategory', 'title').populate('category', 'title');  // Populating category with the title field;
+        const page = parseInt(req.query.page) || 1;  // Default to page 1 if not provided
+        const limit = parseInt(req.query.limit) || 10;  // Default limit is 10 products per page
+        const skip = (page - 1) * limit;  // Calculate the number of products to skip
+
+        // Fetching products with pagination
+        const products = await Product.find()
+            .populate('subcategory', 'title')
+            .populate('category', 'title')
+            .skip(skip)  // Skip products for pagination
+            .limit(limit);  // Limit the number of products returned
+
+        // Count total products for calculating total pages
+        const totalProducts = await Product.countDocuments();
 
         return res.status(200).json({
             success: true,
             status: 200,
             message: "All Products received Successfully!",
-            data: products
+            data: products,
+            pagination: {
+                currentPage: page,
+                totalPages: Math.ceil(totalProducts / limit),
+                totalProducts,
+                limit
+            }
         });
     }
     catch (error) {
         return next(createError(500, "Something went wrong!"));
     }
 };
+
 
 // get products having discount
 const getAllProductDiscount = async (req, res, next) => {
@@ -714,21 +733,48 @@ const getOrderSummary = async (req, res, next) => {
 
 const getOrders = async (req, res) => {
     try {
-        const orders = await Order.find();
-        const ordersWithUserDetails = await Promise.all(orders.map(async (order) => {
-            const user = await users.findById(order.user);
-            return {
-                ...order.toObject(),
-                userName: user ? user.userName : 'No Name'
-            };
+        // Extract page and limit from query parameters, defaulting to page 1 and limit 10
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        // Count total number of orders for pagination calculations
+        const totalOrders = await Order.countDocuments();
+
+        // Fetch orders with pagination and populate userName from the User model
+        const orders = await Order.find()
+            .populate('user', 'userName') // Ensure 'user' field in Order schema references User model
+            .skip(skip)
+            .limit(limit)
+            .exec();
+
+        // Transform orders to include userName directly
+        const ordersWithUserDetails = orders.map(order => ({
+            ...order.toObject(),
+            userName: order.user ? order.user.userName : 'No Name'
         }));
 
-        res.json({ data: ordersWithUserDetails });
+        // Calculate total number of pages
+        const totalPages = Math.ceil(totalOrders / limit);
+
+        // Respond with paginated orders and pagination info
+        res.json({
+            status: 200,
+            message: "Orders are fetched successfully!",
+            totalOrders,
+            data: ordersWithUserDetails,
+            pagination: {
+                currentPage: page,
+                totalPages,
+                limit,
+                totalOrders
+            }
+        });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        console.error('Error fetching orders:', error);
+        res.status(500).json({ message: 'Error fetching orders', error: error.message });
     }
 };
-
 // Edit Order
 const editOrder = async (req, res, next) => {
     try {

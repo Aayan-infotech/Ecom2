@@ -60,6 +60,10 @@ const orderSchema = new Schema({
     address: {
         type: String,
         required: false
+    },
+    invoiceNumber: {
+        type: String,
+        required: false
     }
 },
     {
