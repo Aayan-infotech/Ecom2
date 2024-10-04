@@ -4,9 +4,11 @@ const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
-
 const path = require('path');
 const fs = require('fs');
+
+// Initialize the express app
+const app = express();
 
 // Import routes
 const authRoute = require('./routes/authRoute');
@@ -23,28 +25,17 @@ const invoiceRoute = require('./routes/invoiceRoute');
 const notificationRoute = require('./routes/notificationRoute');
 const paymentRoute = require('./routes/paymentRoute');
 
-
-
 // Ensure the 'exports' directory exists
 const exportDir = path.join(__dirname, 'exports');
-
 if (!fs.existsSync(exportDir)) {
     fs.mkdirSync(exportDir);
 }
 
-
-app.get('/', (req, res) => {
-    res.send("Hi! Jyoti backend code is running successfully.");
-});
-
-
 // Environment variables
 const PORT = process.env.PORT || 3000;
 const MONGO_URL = process.env.MONGO_URL;
-// const FRONTEND = process.env.FRONTEND;
 
-const app = express();
-
+// CORS options
 const corsOptions = {
     origin: '*',
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
@@ -54,49 +45,41 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
-// Use cors middleware with options
-// app.use(cors({
-//     origin: 'http://localhost:3001', // Allow requests from frontend origin
-//     credentials: true // Allow credentials (cookies, authorization headers, etc.)
-//   }));
-
 // Middleware
 app.use(bodyParser.json());
-app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
+// Test route
+app.get('/', (req, res) => {
+    res.send("Hi! Jyoti backend code is running successfully.");
+});
+
 // Routes
 app.use('/api/auth', authRoute);
 app.use('/api/user', userRoute);
-app.use('/api/category', categoryRoute); //added product category routes
-app.use('/api/subcategory', subcategoryRoute); //added product subcategory routes
-app.use('/api/product', productRoute); //added product detail routes
-app.use('/api/favorite', favoriteRoute); //added favorite routes
-app.use('/api/cart', cartRoute); //added cart routes
-app.use('/api/deliveryslot', deliverySlotRoute); //added delivery slot routes
-app.use('/api/address', addressRoute); //added address routes
-app.use('/api/voucher', voucherRoute); //added voucher routes
-app.use('/api/invoices', invoiceRoute); 
+app.use('/api/category', categoryRoute);
+app.use('/api/subcategory', subcategoryRoute);
+app.use('/api/product', productRoute);
+app.use('/api/favorite', favoriteRoute);
+app.use('/api/cart', cartRoute);
+app.use('/api/deliveryslot', deliverySlotRoute);
+app.use('/api/address', addressRoute);
+app.use('/api/voucher', voucherRoute);
+app.use('/api/invoices', invoiceRoute);
 app.use('/api/notification', notificationRoute);
 app.use('/api/payment', paymentRoute);
 
-
-
-
-
-
-
-// Response handler middleware
-app.use((obj, req, res, next) => {
-    const statusCode = obj.status || 500;
-    const message = obj.message || "Something went wrong!";
+// Error handling middleware
+app.use((err, req, res, next) => {
+    const statusCode = err.status || 500;
+    const message = err.message || "Something went wrong!";
     return res.status(statusCode).json({
-        success: [200, 201, 204].includes(obj.status),
+        success: [200, 201, 204].includes(statusCode),
         status: statusCode,
         message: message,
-        data: obj.data
+        data: err.data || null
     });
 });
 
@@ -106,7 +89,7 @@ mongoose.connect("mongodb+srv://nivedita:ecommerce4312@e-commerce.yv2bdut.mongod
     .then(() => {
         console.log('connected to MongoDB');
         app.listen(PORT, () => {
-            console.log(Node API app is running on port ${PORT});
+            console.log(`Node API app is running on port ${PORT}`);
         });
     })
     .catch((error) => {
