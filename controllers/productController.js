@@ -679,19 +679,32 @@ const getOrderSummary = async (req, res, next) => {
         // Fetch user details manually (if needed)
         const user = await users.findById(order.user).select('userName email').exec();
 
-        // Fetch order items and their product details
+        // Initialize total discount
         let productTotalCost = 0;
+        let totalDiscountAmount = 0;
+
+        // Fetch order items and their product details including discount
         const orderItems = await Promise.all(
             order.items.map(async (item) => {
-                const product = await Product.findById(item.product).select('name price').exec();
-                const itemCost = product.price * item.quantity;
-                productTotalCost += itemCost;
+                const product = await Product.findById(item.product).select('name price discount').exec();
+
+                const itemDiscount = product.discount || 0; // Default to 0 if no discount
+                const itemCostBeforeDiscount = product.price * item.quantity;
+                const discountAmount = (itemCostBeforeDiscount * itemDiscount) / 100; // Calculate discount amount
+                const itemCostAfterDiscount = itemCostBeforeDiscount - discountAmount;
+
+                // Sum up total product cost and total discount amount
+                productTotalCost += itemCostAfterDiscount;
+                totalDiscountAmount += discountAmount;
 
                 return {
                     product: product.name,
                     price: product.price,
                     quantity: item.quantity,
-                    itemCost
+                    discount: itemDiscount, // Show discount percentage
+                    itemCostBeforeDiscount,
+                    discountAmount, // Show discount amount
+                    itemCostAfterDiscount // Show final cost after discount
                 };
             })
         );
@@ -716,7 +729,7 @@ const getOrderSummary = async (req, res, next) => {
             };
         }
 
-        // Prepare the order summary response
+        // Prepare the order summary response, including total discount amount
         const orderSummary = {
             orderId: order.orderId,
             user: {
@@ -725,6 +738,7 @@ const getOrderSummary = async (req, res, next) => {
             },
             items: orderItems,
             productTotalCost,
+            totalDiscountAmount, // Include total discount amount
             deliverySlot: deliverySlotDetails,
             totalAmount: order.totalAmount,
             voucherUsed: order.voucherUsed,
