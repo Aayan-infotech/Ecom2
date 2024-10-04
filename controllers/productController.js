@@ -670,31 +670,46 @@ const getOrderSummary = async (req, res, next) => {
     try {
         const { orderId } = req.params;
 
-        // Fetch the order without populate
-        const order = await Order.findOne({ orderId });
+        // Fetch the order by orderId
+        const order = await Order.findOne({ orderId }).exec();
         if (!order) {
             return next(createError(404, 'Order not found!'));
         }
 
-        // Fetch user data manually
-        const user = await users.findById(order.user).select('userName email');
+        // Fetch user details manually (if needed)
+        const user = await users.findById(order.user).select('userName email').exec();
 
-        // Fetch order items and product details manually
+        // Fetch order items and their product details
+        let productTotalCost = 0;
         const orderItems = await Promise.all(
             order.items.map(async (item) => {
-                const product = await Product.findById(item.product).select('name price');
+                const product = await Product.findById(item.product).select('name price').exec();
+                const itemCost = product.price * item.quantity;
+                productTotalCost += itemCost;
+
                 return {
                     product: product.name,
                     price: product.price,
-                    quantity: item.quantity
+                    quantity: item.quantity,
+                    itemCost
                 };
             })
         );
 
-        // Fetch voucher details manually (if used)
+        // Manually fetch the delivery slot details using deliverySlotId
+        const deliverySlot = await Delivery.findById(order.deliverySlot.deliverySlotId).exec();
+        const deliverySlotDetails = {
+            deliverySlotId: order.deliverySlot.deliverySlotId,
+            date: order.deliverySlot.date,
+            timePeriod: order.deliverySlot.timePeriod,
+            deliveryType: deliverySlot ? deliverySlot.deliveryType : null, // Assuming you have deliveryType in DeliverySlot model
+            deliveryCharge: deliverySlot ? deliverySlot.deliveryCharge : 0 // Assuming you have deliveryCharge in DeliverySlot model
+        };
+
+        // Fetch voucher details manually if voucher is used
         let voucher = null;
         if (order.voucher) {
-            const voucherDoc = await Voucher.findById(order.voucher).select('code discount');
+            const voucherDoc = await Voucher.findById(order.voucher).select('code discount').exec();
             voucher = {
                 code: voucherDoc.code,
                 discount: voucherDoc.discount
@@ -709,11 +724,12 @@ const getOrderSummary = async (req, res, next) => {
                 email: user.email
             },
             items: orderItems,
+            productTotalCost,
+            deliverySlot: deliverySlotDetails,
             totalAmount: order.totalAmount,
             voucherUsed: order.voucherUsed,
-            voucher: voucher,
+            voucher,
             status: order.status,
-            deliverySlot: order.deliverySlot,
             address: order.address,
             expectedDeliveryDate: order.expectedDeliveryDate
         };
