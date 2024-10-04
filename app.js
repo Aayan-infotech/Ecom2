@@ -48,7 +48,7 @@ app.use(cookieParser());
 
 // Routes
 app.get('/', (req, res) => {
-    res.send("Hi! Joit backend code is running successfully.");
+    res.send("Hi! Jyoti backend code is running successfully.");
 });
 
 app.use('/api/auth', authRoute);
