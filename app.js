@@ -34,7 +34,7 @@ if (!fs.existsSync(exportDir)) {
 
 
 app.get('/', (req, res) => {
-    res.send("Hi! Joit backend code is running successfully.");
+    res.send("Hi! Jyoti backend code is running successfully.");
 });
 
 
