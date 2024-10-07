@@ -21,7 +21,8 @@ const {
     getRecommendationByMonth,
     getProductByCategoryId,
     getProductFrequency,
-    getOrderSummary
+    getOrderSummary,
+    orderSummary
 } = require("../controllers/productController");
 
 
@@ -61,5 +62,7 @@ router.get('/categoryproducts/:categoryId', getProductByCategoryId);
 
 router.get('/frequency', getProductFrequency);
 router.get('/summary/:orderId', getOrderSummary);
+router.get('/summary', orderSummary);
+
 
 module.exports = router;

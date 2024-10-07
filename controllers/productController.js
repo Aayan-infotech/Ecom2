@@ -404,6 +404,126 @@ const searchProduct = async (req, res, next) => {
 //     }
 // };
 
+// to get the order summary
+const orderSummary = async (req, res, next) => {
+    try {
+        const { userId, voucherCode, deliverySlotId, addressId } = req.body;
+
+        // Validate the address by addressId
+        const address = await Address.findById(addressId);
+
+        // Check if the address exists and if the user ID matches
+        if (!address || address.user.toString() !== userId) {
+            return next(createError(400, "Invalid address!"));
+        }
+
+        // Fetch the cart for the user
+        const cart = await findCart(userId);
+        if (!cart) return next(createError(404, "Cart not found!"));
+
+        // If no products in the cart, return an error
+        if (!cart.products.length) return next(createError(400, "No items in the cart!"));
+
+        // Calculate total amount and order items
+        // const { totalAmount, orderItems } = await calculateTotalAndItems(cart);
+        // Calculate total amount and order items, including discounts on each item
+        const { totalAmount, orderItems, totalDiscount } = await calculateTotalAndItemsWithDiscount(cart);
+
+        console.log("cart", cart);
+        
+
+        // Calculate the delivery charge dynamically
+        const deliveryCharge = await calculateDeliveryCharge(deliverySlotId);
+
+        // Apply voucher and calculate final amount
+        const { finalAmount, voucher, voucherUsed } = await applyVoucher(voucherCode, totalAmount);
+
+        // Add delivery charge to the final amount
+        const totalWithDelivery = finalAmount + deliveryCharge;
+
+        // Fetch the delivery slot details
+        const deliverySlotDoc = await Delivery.findById(deliverySlotId);
+        if (!deliverySlotDoc) return next(createError(404, "Delivery slot not found!"));
+
+        // Extract and format date and time from the delivery slot
+        const { date, timePeriod } = deliverySlotDoc;
+        const trimmedDate = new Date(date).toISOString().split('T')[0]; // Format date to YYYY-MM-DD
+        const trimmedTime = timePeriod.trim(); // Trim any whitespace from time period
+
+        // Create the delivery slot summary
+        const deliverySlot = {
+            deliverySlotId,
+            date: trimmedDate,
+            timePeriod: trimmedTime
+        };
+
+        // Return the order summary data (without saving it)
+        return res.status(200).json({
+            success: true,
+            status: 200,
+            message: "Order summary fetched successfully!",
+            data: {
+                userId,
+                orderItems,
+                totalAmount,
+                totalDiscount, // Include total discount
+                voucher,
+                voucherUsed,
+                finalAmount,
+                deliveryCharge,
+                totalWithDelivery,
+                deliverySlot,
+                address
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching order summary:', error);
+        return next(createError(500, "Something went wrong!"));
+    }
+};
+
+const calculateTotalAndItemsWithDiscount = async (cart) => {
+    let totalAmount = 0;
+    let totalDiscount = 0;
+    const orderItems = [];
+
+    // Get product IDs from the cart
+    const productIds = cart.products.map(item => item.product);
+
+    // Fetch products from the Product collection using their IDs
+    const products = await Product.find({ _id: { $in: productIds } });
+
+    // Map products to cart items and calculate prices and discounts
+    cart.products.forEach(item => {
+        const product = products.find(p => p._id.toString() === item.product.toString());
+
+        if (product) {
+            const price = product.price;
+            const discount = product.discount || 0; // Assuming a 'discount' field exists in the Product model
+            const finalPrice = price - discount;
+            const quantity = item.quantity;
+            const totalProductPrice = finalPrice * quantity;
+
+            // Calculate total amounts
+            totalAmount += totalProductPrice;
+            totalDiscount += discount * quantity;
+
+            // Add item to order summary
+            orderItems.push({
+                productId: product._id,
+                name: product.name,
+                price,
+                discount,
+                finalPrice,
+                quantity,
+                totalProductPrice
+            });
+        }
+    });
+
+    return { totalAmount, orderItems, totalDiscount };
+};
+
 // create order
 const createOrder = async (req, res, next) => {
     try {
@@ -1249,5 +1369,6 @@ module.exports = {
     getRecommendationByMonth,
     getProductByCategoryId,
     getProductFrequency,
-    getOrderSummary
+    getOrderSummary,
+    orderSummary
 };
