@@ -265,10 +265,156 @@ const updateQuantity = async(req, res, next) => {
     }
 }
 
+// to increase quantity
+const increaseQuantity = async(req, res, next) => {
+    try{
+        const { userId, productId } = req.body
+
+        const cart = await Cart.findOne({user: userId});
+        if(!cart){
+            return next(createError(404, "Cart not found!"));
+        }
+
+        // find the item in the cart to update
+        const cartItem = cart.products.find(item => item.product.toString() === productId.toString());
+
+        if(!cartItem){
+           return next(createError(404, "Product not found in cart!"));            
+        }
+
+        const product = await Product.findById(productId);
+        if (!product) {
+            return next(createError(404, "Product not found!"));
+        }
+
+
+        if(product.stock < (cartItem.quantity + 1)){
+            return next(createError(400, "Not enough stock available!"));
+        }
+
+        cartItem.quantity += 1;
+
+        await cart.save();
+
+        return res.status(200).json({
+            success: true,
+            status: 200,
+            message: "Quantity updated by 1 successully!",
+            data: cart
+        })
+
+    }
+    catch(error){
+        return next(createError(500, "Something went wrong!"))
+    }
+};
+
+
+// to descrease quantity
+const decreaseQuantity = async(req, res, next) => {
+    try{
+        const { userId, productId } = req.body
+
+        const cart = await Cart.findOne({user: userId});
+        if(!cart){
+            return next(createError(404, "Cart not found!"));
+        }
+
+        // find the item in the cart to update
+        const cartItem = cart.products.find(item => item.product.toString() === productId.toString());
+
+        if(!cartItem){
+           return next(createError(404, "Product not found in cart!"));            
+        }
+
+        const product = await Product.findById(productId);
+        if (!product) {
+            return next(createError(404, "Product not found!"));
+        }
+
+
+        if(product.stock == 0){
+            return next(createError(400, "Not enough stock available!"));
+        }
+
+        if(cartItem.quantity > 1){
+            cartItem.quantity -= 1;
+        }
+
+        await cart.save();
+
+        return res.status(200).json({
+            success: true,
+            status: 200,
+            message: "Quantity decreased by 1 successully!",
+            data: cart
+        })
+
+    }
+    catch(error){
+        return next(createError(500, "Something went wrong!"))
+    }
+};
+
+const getProductFromCart = async (req, res, next) => {
+    try {
+        let userId;
+
+        // Extract the token from the request headers
+        const token = req.headers['authorization']?.split(' ')[1];
+
+        if (token) {
+            // Verify the token
+            const jwtSecret = process.env.JWT_SECRET || 'your_jwt_secret';
+            const decoded = jwt.verify(token, jwtSecret);
+            
+            // Extract the user ID from the token
+            userId = decoded.id;
+        } else if (req.body.userId || req.params.userId) {
+            // Fallback: use userId from body or params if token is not present
+            userId = req.body.userId || req.params.userId;
+        } else {
+            // Return error if both token and userId are missing
+            return next(createError(401, "Access token or userId is missing!"));
+        }
+
+        // Fetch the user's cart
+        const cart = await Cart.findOne({ user: userId }).populate('products.product');
+
+        if (!cart) {
+            return next(createError(404, "Cart not found!"));
+        }
+
+        // Find the specific product in the cart
+        const { productId } = req.params;
+        const cartItem = cart.products.find(item => item.product._id.toString() === productId);
+
+        if (!cartItem) {
+            return next(createError(404, "Product not found in cart!"));
+        }
+
+        // Return the product data
+        return res.status(200).json({
+            success: true,
+            message: "Product fetched successfully!",
+            data: cartItem
+        });
+    } catch (error) {
+        // Handle token verification or other errors
+        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
+            return next(createError(401, "Invalid or expired token!"));
+        }
+        return next(createError(500, "Something went wrong!"));
+    }
+};
+
 module.exports = {
     addToCart,
     removeFromCart,
     getCart,
     changeQuantity,
-    updateQuantity
+    updateQuantity,
+    increaseQuantity,
+    decreaseQuantity,
+    getProductFromCart
 }
