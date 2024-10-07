@@ -22,8 +22,8 @@ router.delete('/delete/:productId', removeFromCart);
 router.get('/get/:userId?', getCart);
 router.put('/change', changeQuantity);
 router.put('/update/:id', updateQuantity);
-router.put('/increase', decreaseQuantity);
-router.put('/decrease', increaseQuantity);
+router.put('/decrease', decreaseQuantity);
+router.put('/increase', increaseQuantity);
 router.get('/product/:productId', getProductFromCart);
 
 module.exports = router;
