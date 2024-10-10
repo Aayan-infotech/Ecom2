@@ -35,7 +35,7 @@ if (!fs.existsSync(exportDir)) {
 
 
 // Environment variables
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3129;
 const MONGO_URL = process.env.MONGO_URL;
 // const FRONTEND = process.env.FRONTEND;
 

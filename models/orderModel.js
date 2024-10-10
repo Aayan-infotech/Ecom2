@@ -64,7 +64,9 @@ const orderSchema = new Schema({
     invoiceNumber: {
         type: String,
         required: false
-    }
+    },
+    paymentId: { type: String }, // New field for payment ID
+
 },
     {
         timestamps: true
