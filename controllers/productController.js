@@ -525,9 +525,98 @@ const calculateTotalAndItemsWithDiscount = async (cart) => {
 };
 
 // create order
+// const createOrder = async (req, res, next) => {
+//     try {
+//         const { userId, voucherCode, deliverySlotId, addressId } = req.body;
+
+//         // Validate the address by addressId
+//         // const addressIsValid = await validateAddress(userId, addressId);
+//         // if (!addressIsValid) return next(createError(400, "Invalid address!"));
+
+//         const address = await Address.findById(addressId);
+//         console.log("address", address);
+
+//         // Check if the address exists and if the user ID matches
+//         if (!address || address.user.toString() !== userId) {
+//             return next(createError(400, "Invalid address!"));
+//         }
+
+
+
+//         const cart = await findCart(userId);
+//         if (!cart) return next(createError(404, "Cart not found!"));
+
+//         if (!cart.products.length) return next(createError(400, "No order placed!"));
+
+//         const { totalAmount, orderItems } = await calculateTotalAndItems(cart);
+//         const deliveryCharge = await calculateDeliveryCharge(deliverySlotId); // Calculate delivery charge dynamically
+//         console.log(deliveryCharge);
+
+//         const { finalAmount, voucher, voucherUsed } = await applyVoucher(voucherCode, totalAmount);
+//         const totalWithDelivery = finalAmount + deliveryCharge; // Add delivery charge to the final amount
+//         console.log(finalAmount);
+
+//         await updateStockAndClearCart(cart.products, cart);
+
+//         const orderId = generateOrderId();
+//         const deliveryDate = calculateDeliveryDate();
+
+//         const user = await users.findById(userId);
+
+//         await sendOrderConfirmationEmail(user);
+
+//         const deliverySlotDoc = await Delivery.findById(deliverySlotId);
+//         if (!deliverySlotDoc) return next(createError(404, "Delivery slot not found!"));
+
+//         // Extract date and time from the delivery slot document
+//         const { date, timePeriod } = deliverySlotDoc;
+
+//         // Trim and format the date and time
+//         const trimmedDate = new Date(date).toISOString().split('T')[0]; // Get date in YYYY-MM-DD format
+//         const trimmedTime = timePeriod.trim(); // Trim any whitespace from time period
+
+
+//         const deliverySlot = {
+//             deliverySlotId,
+//             date: trimmedDate,
+//             timePeriod: trimmedTime
+//         }
+//         const newOrder = await saveOrder(
+//             userId,
+//             orderItems,
+//             totalWithDelivery,
+//             voucher,
+//             voucherUsed,
+//             orderId,
+//             deliveryDate,
+//             deliverySlot,
+//             addressId
+//         );
+
+//         // Send notification
+//         const title = 'Order Confirmation';
+//         const body = `Hi ${user.userName}, your order with ID ${orderId} has been placed successfully. Total amount is $${totalWithDelivery}.`;
+//         const deviceToken = user.deviceToken; // Ensure user has deviceToken field
+//         await notification(userId, title, body, deviceToken);
+
+//         return res.status(201).json({
+//             success: true,
+//             status: 201,
+//             message: "Order created successfully!",
+//             data: {
+//                 newOrder
+//             }
+//         });
+//     } catch (error) {
+//         console.error('Error creating order:', error);
+//         return next(createError(500, "Something went wrong!"));
+//     }
+// };
+
+// create order
 const createOrder = async (req, res, next) => {
     try {
-        const { userId, voucherCode, deliverySlotId, addressId } = req.body;
+        const { userId, voucherCode, deliverySlotId, addressId, paymentMethod } = req.body;
 
         // Validate the address by addressId
         // const addressIsValid = await validateAddress(userId, addressId);
@@ -556,9 +645,23 @@ const createOrder = async (req, res, next) => {
         const totalWithDelivery = finalAmount + deliveryCharge; // Add delivery charge to the final amount
         console.log(finalAmount);
 
+        const orderId = generateOrderId();
+
+         // Step 4: Call Payment Helper Function
+         const paymentResult = await processPayment(paymentMethod, totalWithDelivery, req.body, orderId, userId);
+
+         // Check if payment was successful
+         if (!paymentResult.success) {
+             return res.status(400).json({ success: false, message: "Payment failed!" });
+         }
+
+         // Now save the payment ID in the order model
+        const paymentId = paymentResult.paymentId; // Assuming processPayment returns paymentId
+        console.log("paymentId", paymentId);
+        
+
         await updateStockAndClearCart(cart.products, cart);
 
-        const orderId = generateOrderId();
         const deliveryDate = calculateDeliveryDate();
 
         const user = await users.findById(userId);
@@ -590,7 +693,8 @@ const createOrder = async (req, res, next) => {
             orderId,
             deliveryDate,
             deliverySlot,
-            addressId
+            addressId,
+            paymentId
         );
 
         // Send notification
@@ -612,6 +716,268 @@ const createOrder = async (req, res, next) => {
         return next(createError(500, "Something went wrong!"));
     }
 };
+
+
+// Function to get SumUp access token
+const getSumUpAccessToken = async () => {
+    const tokenUrl = 'https://api.sumup.com/token';
+    
+    // Retrieve credentials from environment variables
+    const SUMUP_CLIENT_ID = process.env.SUMUP_CLIENT_ID;
+    const SUMUP_CLIENT_SECRET = process.env.SUMUP_CLIENT_SECRET;
+
+    // Validate that credentials are present
+    if (!SUMUP_CLIENT_ID || !SUMUP_CLIENT_SECRET) {
+        throw new Error('SumUp credentials are not set in environment variables.');
+    }
+
+    // Encode credentials in Base64 as per SumUp's requirements
+    const credentials = Buffer.from(`${SUMUP_CLIENT_ID}:${SUMUP_CLIENT_SECRET}`).toString('base64');
+
+    try {
+        const response = await axios.post(
+            tokenUrl,
+            'grant_type=client_credentials&scope=payments',
+            {
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Authorization': `Basic ${credentials}`,
+                },
+            }
+        );
+        return response.data.access_token;
+    } catch (error) {
+        console.error(
+            'Error obtaining SumUp access token:',
+            error.response ? error.response.data : error.message
+        );
+        throw new Error('SumUp authentication failed');
+    }
+};
+
+// Function to create SumUp payment
+const createSumUpPayment = async (accessToken, totalAmount, currency = 'USD', description = '', customData = {}) => {
+    const paymentUrl = 'https://api.sumup.com/v0.1/checkouts';
+    
+    const merchantCode = process.env.SUMUP_MERCHANT_CODE;
+    const redirectUrl = process.env.REDIRECT_URL || 'https://www.google.com'; // Example redirect URL
+
+    if (!merchantCode) {
+        throw new Error('Merchant code (SUMUP_MERCHANT_CODE) is missing.');
+    }
+    
+    try {
+        // Validate and format totalAmount
+        if (typeof totalAmount !== 'number' || isNaN(totalAmount)) {
+            throw new Error('Invalid totalAmount. It must be a valid number.');
+        }
+        const paymentAmount = totalAmount.toFixed(2); // e.g., "22.00"
+
+        const payload = {
+            checkout_reference: `order_${customData.order_id}`,
+            amount: paymentAmount,
+            currency: currency,
+            description: description || 'Order payment',
+            merchant_code: merchantCode,
+            redirect_url: redirectUrl,
+            metadata: customData,
+        };
+
+        // Log the payload for debugging (remove in production)
+        console.log("SumUp Payment Payload:", JSON.stringify(payload, null, 2));
+
+        const response = await axios.post(
+            paymentUrl,
+            payload,
+            {
+                headers: {
+                    'Authorization': `Bearer ${accessToken}`,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 10000, // Optional: Set a timeout for the request
+            }
+        );
+
+        // Log the successful response (remove in production)
+        console.log("SumUp Payment Response:", JSON.stringify(response.data, null, 2));
+        return response.data;
+    } catch (error) {
+        if (error.response) {
+            console.error('SumUp API Error Status:', error.response.status);
+            console.error('SumUp API Error Headers:', JSON.stringify(error.response.headers, null, 2));
+            console.error('SumUp API Error Data:', JSON.stringify(error.response.data, null, 2));
+        } else if (error.request) {
+            console.error('No response received from SumUp:', error.request);
+        } else {
+            console.error('Error setting up the request:', error.message);
+        }
+        throw new Error('SumUp payment creation failed');
+    }
+};
+
+// Payment helper function
+const processPayment = async (paymentMethod, totalAmount, body, orderId, userId) => {
+    try {
+        if (paymentMethod === 'stripe') {
+            // Stripe payment handling
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: totalAmount * 100, // Amount in cents
+                currency: 'usd',
+                automatic_payment_methods: {
+                    enabled: true,
+                },
+            });
+            console.log("paymentIntent.client_secret", paymentIntent.client_secret);
+            
+
+            // Check if payment succeeded
+            if (paymentIntent.status === 'succeeded') {
+                // Save payment information in your database
+                await savePayment({
+                    userId,
+                    orderId,
+                    paymentMethod: 'stripe',
+                    paymentStatus: paymentIntent.status,
+                    paymentId: paymentIntent.id,
+                    amountPaid: totalAmount,
+                    currency: 'usd',
+                    transactionDetails: paymentIntent,
+                });
+
+                return {
+                    success: true,
+                    clientSecret: paymentIntent.client_secret,
+                    paymentId: paymentIntent.id, // Add this line to return the payment ID
+                    message: "Payment successful with Stripe."
+                };
+            }
+
+        } else if (paymentMethod === 'paypal') {
+            // PayPal payment handling
+            const createPaymentJson = {
+                "intent": "sale",
+                "payer": {
+                    "payment_method": "paypal"
+                },
+                "transactions": [{
+                    "amount": {
+                        "currency": "USD",
+                        "total": totalAmount.toString()
+                    },
+                    "description": "Order payment"
+                }],
+                "redirect_urls": {
+                    "return_url": "http://44.196.192.232:2033/cart",
+                    "cancel_url": "http://44.196.192.232:2033/"
+                }
+            };
+
+            const payment = await new Promise((resolve, reject) => {
+                paypal.payment.create(createPaymentJson, (error, payment) => {
+                    if (error) {
+                        reject(error);
+                    } else {
+                        const approvalUrl = payment.links.find(link => link.rel === 'approval_url').href;
+                        console.log("approvalUrl", approvalUrl);
+                        
+                        resolve({ success: true, approvalUrl, payment });
+                    }
+                });
+            });
+
+            if (payment.success) {
+                // Save PayPal payment information in your database
+                await savePayment({
+                    userId,
+                    orderId,
+                    paymentMethod: 'paypal',
+                    paymentStatus: payment.payment.state, // PayPal has 'approved', 'failed', etc.
+                    paymentId: payment.payment.id,
+                    amountPaid: totalAmount,
+                    currency: 'USD',
+                    transactionDetails: payment.payment,
+                });
+
+                return {
+                    success: true,
+                    approvalUrl: payment.approvalUrl, // Redirect user to approval URL for PayPal
+                    paymentId: payment.payment.id,
+                    message: "Payment initiated with PayPal."
+                };
+            }
+            
+        } else if (paymentMethod === 'sumup') {
+            // SumUp payment handling
+            // Step 1: Authenticate with SumUp
+            const accessToken = await getSumUpAccessToken();
+            console.log("SumUp Access Token:", accessToken);
+            const description = `Payment for order ${orderId}`; // Example description
+            const customData = {
+                order_id: orderId,  // Example of custom data
+                user_id: userId,
+            };
+
+            // Step 2: Create SumUp payment
+            const sumUpPayment = await createSumUpPayment(accessToken, totalAmount, 'USD', description, customData);
+            console.log("SumUp Payment Response:", sumUpPayment);
+
+            // Assuming SumUp returns a checkout URL to redirect the user for payment
+            if (sumUpPayment.checkout_url) {
+                // Save SumUp payment information in your database
+                await savePayment({
+                    userId,
+                    orderId,
+                    paymentMethod: 'sumup',
+                    paymentStatus: 'initiated', // Initial status; you may update based on webhook
+                    paymentId: sumUpPayment.id,
+                    amountPaid: totalAmount,
+                    currency: 'USD',
+                    transactionDetails: sumUpPayment,
+                });
+
+                return {
+                    success: true,
+                    checkoutUrl: sumUpPayment.checkout_url, // Redirect user to SumUp checkout URL
+                    paymentId: sumUpPayment.id,
+                    message: "Payment initiated with SumUp."
+                };
+            } else {
+                throw new Error('SumUp payment initiation failed');
+            }
+
+        } 
+         else {
+            return { success: false, message: "Invalid payment method!" };
+        }
+    } catch (error) {
+        console.error('Error processing payment:', error);
+        return { success: false, message: "Payment failed due to an error!" };
+    }
+};
+
+const savePayment = async ({ userId, orderId, paymentMethod, paymentStatus, paymentId, amountPaid, currency, transactionDetails }) => {
+    try {
+        const payment = new Payment({
+            userId,
+            orderId,
+            paymentMethod,
+            paymentStatus,
+            paymentId,
+            amountPaid,
+            currency,
+            transactionDetails
+        });
+        await payment.save();
+        console.log('Payment saved successfully:', payment);
+    } catch (error) {
+        console.error('Error saving payment:', error);
+        throw new Error('Failed to save payment.');
+    }
+};
+
+
+
+
 
 const findCart = async (userId) => {
     return await Cart.findOne({ user: userId });
