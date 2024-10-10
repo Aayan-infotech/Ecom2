@@ -10,7 +10,20 @@ const nodemailer = require('nodemailer');
 const Delivery = require('../models/deliverySlotModel')
 const { createNotification } = require('../services/notificationService');
 const Address = require('../models/addressModel')
-const { notification } = require('../controllers/notification')
+const { notification } = require('../controllers/notification');
+const Stripe = require('stripe');
+const paypal = require('paypal-rest-sdk');
+const Payment = require('../models/paymentModel');
+const axios = require('axios');
+
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
+// Configure PayPal
+paypal.configure({
+    'mode': process.env.PAYPAL_MODE, // 'sandbox' or 'live'
+    'client_id': process.env.PAYPAL_CLIENT_ID,
+    'client_secret': process.env.PAYPAL_CLIENT_SECRET
+});
 
 
 // add product
