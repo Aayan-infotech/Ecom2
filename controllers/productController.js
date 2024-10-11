@@ -1884,5 +1884,6 @@ module.exports = {
     getProductByCategoryId,
     getProductFrequency,
     getOrderSummary,
-    orderSummary
+    orderSummary,
+    buyNow
 };

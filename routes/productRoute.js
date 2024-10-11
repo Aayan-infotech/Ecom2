@@ -22,7 +22,8 @@ const {
     getProductByCategoryId,
     getProductFrequency,
     getOrderSummary,
-    orderSummary
+    orderSummary,
+    buyNow
 } = require("../controllers/productController");
 
 
@@ -37,6 +38,7 @@ router.get('/subcategory/:id', getProductsBySubcategoryId);
 router.delete('/delete/:id', deleteProduct);
 router.post('/search', searchProduct);
 router.post('/order', createOrder);
+router.post('/order-now', buyNow);
 router.get('/order-history/:id', getOrderHistory);
 router.put('/update/:id', updateProduct);
 router.get('/:subcategoryId/recommendation', getRecommendationByMonth);
