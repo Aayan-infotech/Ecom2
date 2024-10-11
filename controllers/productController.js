@@ -537,6 +537,114 @@ const calculateTotalAndItemsWithDiscount = async (cart) => {
     return { totalAmount, orderItems, totalDiscount };
 };
 
+// to buy a product
+const buyNow = async (req, res, next) => {
+    try {
+        const { userId, voucherCode, deliverySlotId, addressId, paymentMethod, productId, quantity } = req.body;
+
+        // Validate the quantity
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+            return next(createError(400, "Invalid quantity! It must be a positive integer."));
+        }
+
+        // Validate the user's address
+        const address = await Address.findById(addressId);
+        if (!address || address.user.toString() !== userId) {
+            return next(createError(400, "Invalid address!"));
+        }
+
+        // Find the product
+        const product = await Product.findById(productId);
+        if (!product) {
+            return next(createError(404, "Product not found!"));
+        }
+
+        // Check stock availability
+        if (product.stock < quantity) {
+            return next(createError(400, `Insufficient stock! Only ${product.stock} available.`));
+        }
+
+        // Calculate total amount for the requested quantity
+        const totalAmount = product.price * quantity; // Adjust total amount calculation
+        const orderItems = [{ product: productId, quantity }]; // Use the requested quantity
+
+        // Calculate delivery charge
+        const deliveryCharge = await calculateDeliveryCharge(deliverySlotId);
+        const { finalAmount, voucher, voucherUsed } = await applyVoucher(voucherCode, totalAmount);
+        const totalWithDelivery = finalAmount + deliveryCharge;
+
+        // Generate order ID
+        const orderId = generateOrderId();
+
+        // Process the payment
+        const paymentResult = await processPayment(paymentMethod, totalWithDelivery, req.body, orderId, userId);
+        if (!paymentResult.success) {
+            return res.status(400).json({ success: false, message: "Payment failed!" });
+        }
+
+        // Save the payment ID
+        const paymentId = paymentResult.paymentId;
+
+        // Update stock for the purchased product
+        await updateStockForBuyNow(productId, quantity);
+
+        // Prepare for the order creation
+        const deliveryDate = calculateDeliveryDate();
+        const user = await users.findById(userId);
+        await sendOrderConfirmationEmail(user);
+
+        // Validate the delivery slot
+        const deliverySlotDoc = await Delivery.findById(deliverySlotId);
+        if (!deliverySlotDoc) {
+            return next(createError(404, "Delivery slot not found!"));
+        }
+
+        // Prepare delivery slot details
+        const { date, timePeriod } = deliverySlotDoc;
+        const trimmedDate = new Date(date).toISOString().split('T')[0];
+        const trimmedTime = timePeriod.trim();
+
+        const deliverySlot = {
+            deliverySlotId,
+            date: trimmedDate,
+            timePeriod: trimmedTime
+        };
+
+        // Save the new order
+        const newOrder = await saveOrder(
+            userId,
+            orderItems,
+            totalWithDelivery,
+            voucher,
+            voucherUsed,
+            orderId,
+            deliveryDate,
+            deliverySlot,
+            addressId,
+            paymentId
+        );
+
+        // Send order confirmation notification
+        const title = 'Order Confirmation';
+        const body = `Hi ${user.userName}, your order with ID ${orderId} has been placed successfully. Total amount is $${totalWithDelivery}.`;
+        const deviceToken = user.deviceToken;
+        await notification(userId, title, body, deviceToken);
+
+        // Respond with the new order details
+        return res.status(201).json({
+            success: true,
+            status: 201,
+            message: "Order created successfully!",
+            data: {
+                newOrder
+            }
+        });
+    } catch (error) {
+        console.error('Error processing buy now order:', error);
+        return next(createError(500, "Something went wrong!"));
+    }
+};
+
 // create order
 // const createOrder = async (req, res, next) => {
 //     try {
@@ -1062,6 +1170,34 @@ const applyVoucher = async (voucherCode, totalAmount) => {
         await voucher.save();
     }
     return { finalAmount: totalAmount, voucher, voucherUsed };
+};
+
+// stock updation for buy now products
+const updateStockForBuyNow = async (productId, quantity) => {
+    try {
+        const product = await Product.findById(productId);
+
+        if (!product) {
+            throw new Error(`Product with ID ${productId} not found`);
+        }
+
+        // Update stock
+        product.stock -= quantity;
+
+        // Send notifications based on stock level
+        if (product.stock <= 4) {
+            await createNotification('Product Getting Out of Stock', `${product.name} is getting low on stock.`);
+        }
+        if (product.stock === 0) {
+            await createNotification('Product Out of Stock', `${product.name} is out of stock.`);
+        }
+
+        // Save the updated product stock
+        await product.save();
+    } catch (error) {
+        console.error('Error updating stock for Buy Now:', error);
+        throw error; // You can handle this error in the buyNow API if needed
+    }
 };
 
 const updateStockAndClearCart = async (products, cart) => {
