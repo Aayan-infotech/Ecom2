@@ -737,7 +737,8 @@ const buyNow = async (req, res, next) => {
 // create order
 const createOrder = async (req, res, next) => {
     try {
-        const { userId, voucherCode, deliverySlotId, addressId, paymentMethod } = req.body;
+        const { userId, voucherCode, deliverySlotId, addressId, paymentMethod, paymentId,
+            paymentStatus } = req.body;
 
         // Validate the address by addressId
         // const addressIsValid = await validateAddress(userId, addressId);
@@ -768,18 +769,18 @@ const createOrder = async (req, res, next) => {
 
         const orderId = generateOrderId();
 
-         // Step 4: Call Payment Helper Function
-         const paymentResult = await processPayment(paymentMethod, totalWithDelivery, req.body, orderId, userId);
-
-         // Check if payment was successful
-         if (!paymentResult.success) {
-             return res.status(400).json({ success: false, message: "Payment failed!" });
-         }
-
-         // Now save the payment ID in the order model
-        const paymentId = paymentResult.paymentId; // Assuming processPayment returns paymentId
-        console.log("paymentId", paymentId);
-        
+          // **Step 1: Verify Payment**
+          const paymentResult = await processPayment(paymentMethod, totalWithDelivery, paymentId, paymentStatus, userId, orderId);
+          console.log("paymentResult", paymentResult);
+          
+           // Check if payment was successful
+           if (!paymentResult.success) {
+               return res.status(400).json({ success: false, message: paymentResult.message });
+           }
+   
+           // Now save the payment ID in the order model
+           const verifiedPaymentId = paymentResult.paymentId; // Obtained from verification
+           console.log("verifiedPaymentId", verifiedPaymentId);        
 
         await updateStockAndClearCart(cart.products, cart);
 
@@ -815,7 +816,7 @@ const createOrder = async (req, res, next) => {
             deliveryDate,
             deliverySlot,
             addressId,
-            paymentId
+            verifiedPaymentId
         );
 
         // Send notification
@@ -937,40 +938,33 @@ const createSumUpPayment = async (accessToken, totalAmount, currency = 'USD', de
 };
 
 // Payment helper function
-const processPayment = async (paymentMethod, totalAmount, body, orderId, userId) => {
+const processPayment = async (paymentMethod, totalAmount, paymentId, paymentStatus, userId, orderId) => {
     try {
         if (paymentMethod === 'stripe') {
-            // Stripe payment handling
-            const paymentIntent = await stripe.paymentIntents.create({
-                amount: totalAmount * 100, // Amount in cents
-                currency: 'usd',
-                automatic_payment_methods: {
-                    enabled: true,
-                },
-            });
-            console.log("paymentIntent.client_secret", paymentIntent.client_secret);
-            
+            // Stripe payment verification
+            const paymentIntent = await stripe.paymentIntents.retrieve(paymentId);
+            // console.log("Retrieved PaymentIntent:", paymentIntent);
 
-            // Check if payment succeeded
             if (paymentIntent.status === 'succeeded') {
                 // Save payment information in your database
                 await savePayment({
                     userId,
-                    orderId,
+                    orderId, // Ensure consistency or pass orderId appropriately
                     paymentMethod: 'stripe',
                     paymentStatus: paymentIntent.status,
                     paymentId: paymentIntent.id,
                     amountPaid: totalAmount,
-                    currency: 'usd',
+                    currency: paymentIntent.currency,
                     transactionDetails: paymentIntent,
                 });
 
                 return {
                     success: true,
-                    clientSecret: paymentIntent.client_secret,
-                    paymentId: paymentIntent.id, // Add this line to return the payment ID
-                    message: "Payment successful with Stripe."
+                    paymentId: paymentIntent.id,
+                    message: "Payment verified successfully with Stripe."
                 };
+            } else {
+                return { success: false, message: "Payment not completed with Stripe." };
             }
 
         } else if (paymentMethod === 'paypal') {
@@ -1240,7 +1234,7 @@ const sendOrderConfirmationEmail = async (user) => {
     await sendEmail(user.email, subject, text);
 };
 
-const saveOrder = async (userId, orderItems, totalAmount, voucher, voucherUsed, orderId, deliveryDate, deliverySlot, addressId) => {
+const saveOrder = async (userId, orderItems, totalAmount, voucher, voucherUsed, orderId, deliveryDate, deliverySlot, addressId, verifiedPaymentId) => {
     const newOrder = new Order({
         user: userId,
         items: orderItems,
@@ -1250,7 +1244,8 @@ const saveOrder = async (userId, orderItems, totalAmount, voucher, voucherUsed, 
         orderId: orderId,
         expectedDeliveryDate: deliveryDate,
         deliverySlot,
-        address: addressId
+        address: addressId,
+        paymentId: verifiedPaymentId,
     });
     return await newOrder.save();
 };
