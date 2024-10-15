@@ -738,7 +738,7 @@ const buyNow = async (req, res, next) => {
 const createOrder = async (req, res, next) => {
     try {
         const { userId, voucherCode, deliverySlotId, addressId, paymentMethod, paymentId,
-            paymentStatus } = req.body;
+            paymentStatus, token } = req.body;
 
         // Validate the address by addressId
         // const addressIsValid = await validateAddress(userId, addressId);
@@ -770,7 +770,7 @@ const createOrder = async (req, res, next) => {
         const orderId = generateOrderId();
 
           // **Step 1: Verify Payment**
-          const paymentResult = await processPayment(paymentMethod, totalWithDelivery, paymentId, paymentStatus, userId, orderId);
+          const paymentResult = await processPayment(paymentMethod, token, totalWithDelivery, paymentId, paymentStatus, userId, orderId);
           console.log("paymentResult", paymentResult);
           
            // Check if payment was successful
@@ -941,32 +941,71 @@ const createSumUpPayment = async (accessToken, totalAmount, currency = 'USD', de
 const processPayment = async (paymentMethod, totalAmount, paymentId, paymentStatus, userId, orderId) => {
     try {
         if (paymentMethod === 'stripe') {
-            // Stripe payment verification
-            const paymentIntent = await stripe.paymentIntents.retrieve(paymentId);
-            // console.log("Retrieved PaymentIntent:", paymentIntent);
+            // Case 1: Token is present, process payment via token (frontend handles token generation)
+            if (token) {
+                console.log("Processing payment via token...");
 
-            if (paymentIntent.status === 'succeeded') {
-                // Save payment information in your database
-                await savePayment({
-                    userId,
-                    orderId, // Ensure consistency or pass orderId appropriately
-                    paymentMethod: 'stripe',
-                    paymentStatus: paymentIntent.status,
-                    paymentId: paymentIntent.id,
-                    amountPaid: totalAmount,
-                    currency: paymentIntent.currency,
-                    transactionDetails: paymentIntent,
+                const charge = await stripe.charges.create({
+                    amount: totalAmount * 100, // Convert to cents
+                    currency: 'usd',
+                    source: token, // Use the token received from the frontend
+                    description: `Order ${orderId} payment`,
+                    metadata: { userId, orderId },
                 });
 
-                return {
-                    success: true,
-                    paymentId: paymentIntent.id,
-                    message: "Payment verified successfully with Stripe."
-                };
-            } else {
-                return { success: false, message: "Payment not completed with Stripe." };
-            }
+                if (charge.status === 'succeeded') {
+                    // Save payment information in your database
+                    await savePayment({
+                        userId,
+                        orderId,
+                        paymentMethod: 'stripe',
+                        paymentStatus: charge.status,
+                        paymentId: charge.id,
+                        amountPaid: totalAmount,
+                        currency: charge.currency,
+                        transactionDetails: charge,
+                    });
 
+                    return {
+                        success: true,
+                        paymentId: charge.id,
+                        message: "Payment completed successfully with Stripe (via token)."
+                    };
+                } else {
+                    return { success: false, message: "Payment not completed with Stripe (via token)." };
+                }
+
+            }
+            // Case 2: No token, proceed with payment intent verification (default mobile flow)
+            else if (paymentId) {
+                console.log("Verifying payment via PaymentIntent...");
+
+                const paymentIntent = await stripe.paymentIntents.retrieve(paymentId);
+
+                if (paymentIntent.status === 'succeeded') {
+                    // Save payment information in your database
+                    await savePayment({
+                        userId,
+                        orderId,
+                        paymentMethod: 'stripe',
+                        paymentStatus: paymentIntent.status,
+                        paymentId: paymentIntent.id,
+                        amountPaid: totalAmount,
+                        currency: paymentIntent.currency,
+                        transactionDetails: paymentIntent,
+                    });
+
+                    return {
+                        success: true,
+                        paymentId: paymentIntent.id,
+                        message: "Payment verified successfully with Stripe."
+                    };
+                } else {
+                    return { success: false, message: "Payment not completed with Stripe." };
+                }
+            } else {
+                return { success: false, message: "No payment token or PaymentIntent provided." };
+            }
         } else if (paymentMethod === 'paypal') {
             // PayPal payment handling
             const createPaymentJson = {
