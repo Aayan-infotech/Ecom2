@@ -107,19 +107,23 @@ const getAllProduct = async (req, res, next) => {
 
 
 // get products having discount
-const getAllProductDiscount = async (req, res, next) => {
+const getAllProductDiscountByCategory = async (req, res, next) => {
     try {
-        // Find products where discount is greater than 0
-        const products = await Product.find({ discount: { $gt: 0 } });
+        const { categoryId } = req.params;  // Assuming you're passing categoryId as a URL parameter
+
+        // Find products with a discount greater than 0 and matching the provided categoryId
+        const products = await Product.find({ 
+            discount: { $gt: 0 }, 
+            category: categoryId  // Match categoryId
+        });
 
         return res.status(200).json({
             success: true,
             status: 200,
-            message: "All Products with discount greater than 0 received successfully!",
+            message: `All products with discount greater than 0 in category ${categoryId} received successfully!`,
             data: products
         });
-    }
-    catch (error) {
+    } catch (error) {
         return next(createError(500, "Something went wrong!"));
     }
 };
@@ -1901,7 +1905,7 @@ const getRecommendationByMonth = async (req, res) => {
 module.exports = {
     addProduct,
     getAllProduct,
-    getAllProductDiscount,
+    getAllProductDiscountByCategory,
     getProductById,
     getProductsBySubcategoryId,
     deleteProduct,

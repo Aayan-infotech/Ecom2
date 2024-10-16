@@ -3,7 +3,7 @@ const express = require("express");
 const {
     addProduct,
     getAllProduct,
-    getAllProductDiscount,
+    getAllProductDiscountByCategory,
     getProductById,
     getProductsBySubcategoryId,
     deleteProduct,
@@ -32,7 +32,7 @@ const router = express.Router();
 
 router.post('/add', addProduct);
 router.get('/getall', getAllProduct);
-router.get('/getdiscount', getAllProductDiscount);
+router.get('/getdiscount/:categoryId', getAllProductDiscountByCategory);
 router.get('/get/:id', getProductById);
 router.get('/subcategory/:id', getProductsBySubcategoryId);
 router.delete('/delete/:id', deleteProduct);
