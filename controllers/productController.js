@@ -938,7 +938,7 @@ const createSumUpPayment = async (accessToken, totalAmount, currency = 'USD', de
 };
 
 // Payment helper function
-const processPayment = async (paymentMethod, totalAmount, paymentId, paymentStatus, userId, orderId) => {
+const processPayment = async (paymentMethod, token, totalAmount, paymentId, paymentStatus, userId, orderId) => {
     try {
         if (paymentMethod === 'stripe') {
             // Case 1: Token is present, process payment via token (frontend handles token generation)
@@ -1490,7 +1490,7 @@ const editOrder = async (req, res, next) => {
 
         // Update order items and status
         order.items = items || order.items;
-        order.status = status || order.status;
+        order.orderStatus = status || order.orderStatus;
 
         await order.save();
 
@@ -1519,11 +1519,11 @@ const cancelOrder = async (req, res, next) => {
             return next(createError(404, "Order not found!"));
         }
 
-        order.status = 'Cancelled';
+        order.orderStatus = 'Cancelled';
         await order.save();
 
         // Prepare email content
-        const subject = `Your order ${order.orderId} has been ${order.status}`;
+        const subject = `Your order ${order.orderId} has been ${order.orderStatus}`;
         const text = `Dear ${order.user.userName},\n\nYour order with order ID ${order.orderId} has been ${order.status}.\n\nThank you for shopping with us.\n\nBest regards,\nMD Sweden`;
 
         // Send email notification
@@ -1555,13 +1555,13 @@ const updateOrderStatus = async (req, res, next) => {
             return next(createError(404, "Order not found!"));
         }
 
-        order.status = status;
+        order.orderStatus = status;
 
         await order.save();
 
         // Prepare email content
-        const subject = `Your order ${order.orderId} has been ${order.status}`;
-        const text = `Dear ${order.user.userName},\n\nYour order with order ID ${order.orderId} has been ${order.status}.\n\nThank you for shopping with us.\n\nBest regards,\nMD Sweden`;
+        const subject = `Your order ${order.orderId} has been ${order.orderStatus}`;
+        const text = `Dear ${order.user.userName},\n\nYour order with order ID ${order.orderId} has been ${order.orderStatus}.\n\nThank you for shopping with us.\n\nBest regards,\nMD Sweden`;
 
         // Send email notification
         await sendEmail(order.user.email, subject, text);
@@ -1589,13 +1589,13 @@ const approveOrder = async (req, res, next) => {
             return next(createError(404, "Order not found!"));
         }
 
-        order.status = 'Approved';
+        order.orderStatus = 'Approved';
 
         await order.save();
 
         // Prepare email content
-        const subject = `Your order ${order.orderId} status has been ${order.status}`;
-        const text = `Dear ${order.user.userName},\n\nYour order with order ID ${order.orderId} has been ${order.status}.\n\nThank you for shopping with us.\n\nBest regards,\nMD Sweden`;
+        const subject = `Your order ${order.orderId} status has been ${order.orderStatus}`;
+        const text = `Dear ${order.user.userName},\n\nYour order with order ID ${order.orderId} has been ${order.orderStatus}.\n\nThank you for shopping with us.\n\nBest regards,\nMD Sweden`;
 
         // Send email notification
         await sendEmail(order.user.email, subject, text);
@@ -1622,13 +1622,13 @@ const declineOrder = async (req, res, next) => {
             return next(createError(404, "Order not found!"));
         }
 
-        order.status = 'Declined';
+        order.orderStatus = 'Declined';
 
         await order.save();
 
         // Prepare email content
-        const subject = `Your order ${order.orderId} has been ${order.status}`;
-        const text = `Dear ${order.user.userName},\n\nYour order with order ID ${order.orderId} has been ${order.status}.\n\nThe payment will be confirmed within 20 minutes, if any deduction has been done it will be reverted back.\n\nThank you for shopping with us.\n\nBest regards,\nMD Sweden`;
+        const subject = `Your order ${order.orderId} has been ${order.orderStatus}`;
+        const text = `Dear ${order.user.userName},\n\nYour order with order ID ${order.orderId} has been ${order.orderStatus}.\n\nThe payment will be confirmed within 20 minutes, if any deduction has been done it will be reverted back.\n\nThank you for shopping with us.\n\nBest regards,\nMD Sweden`;
 
         // Send email notification
         await sendEmail(order.user.email, subject, text);
