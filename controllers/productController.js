@@ -1013,61 +1013,161 @@ const processPayment = async (paymentMethod, token, totalAmount, paymentId, paym
             else {
                 return { success: false, message: "No payment token or PaymentIntent provided." };
             }
-        } else if (paymentMethod === 'paypal') {
-            // PayPal payment handling
-            const createPaymentJson = {
-                "intent": "sale",
-                "payer": {
-                    "payment_method": "paypal"
-                },
-                "transactions": [{
-                    "amount": {
-                        "currency": "USD",
-                        "total": totalAmount.toString()
-                    },
-                    "description": "Order payment"
-                }],
-                "redirect_urls": {
-                    "return_url": "http://44.196.192.232:2033/cart",
-                    "cancel_url": "http://44.196.192.232:2033/"
-                }
-            };
+        } 
+        // else if (paymentMethod === 'paypal') {
+        //     // PayPal payment handling
+        //     const createPaymentJson = {
+        //         "intent": "sale",
+        //         "payer": {
+        //             "payment_method": "paypal"
+        //         },
+        //         "transactions": [{
+        //             "amount": {
+        //                 "currency": "USD",
+        //                 "total": totalAmount.toString()
+        //             },
+        //             "description": "Order payment"
+        //         }],
+        //         "redirect_urls": {
+        //             "return_url": "http://44.196.192.232:2033/cart",
+        //             "cancel_url": "http://44.196.192.232:2033/"
+        //         }
+        //     };
 
-            const payment = await new Promise((resolve, reject) => {
-                paypal.payment.create(createPaymentJson, (error, payment) => {
-                    if (error) {
-                        reject(error);
-                    } else {
-                        const approvalUrl = payment.links.find(link => link.rel === 'approval_url').href;
-                        console.log("approvalUrl", approvalUrl);
+        //     const payment = await new Promise((resolve, reject) => {
+        //         paypal.payment.create(createPaymentJson, (error, payment) => {
+        //             if (error) {
+        //                 reject(error);
+        //             } else {
+        //                 const approvalUrl = payment.links.find(link => link.rel === 'approval_url').href;
+        //                 console.log("approvalUrl", approvalUrl);
                         
-                        resolve({ success: true, approvalUrl, payment });
-                    }
-                });
-            });
+        //                 resolve({ success: true, approvalUrl, payment });
+        //             }
+        //         });
+        //     });
 
-            if (payment.success) {
-                // Save PayPal payment information in your database
-                await savePayment({
-                    userId,
-                    orderId,
-                    paymentMethod: 'paypal',
-                    paymentStatus: payment.payment.state, // PayPal has 'approved', 'failed', etc.
-                    paymentId: payment.payment.id,
-                    amountPaid: totalAmount,
-                    currency: 'USD',
-                    transactionDetails: payment.payment,
-                });
+        //     if (payment.success) {
+        //         // Save PayPal payment information in your database
+        //         await savePayment({
+        //             userId,
+        //             orderId,
+        //             paymentMethod: 'paypal',
+        //             paymentStatus: payment.payment.state, // PayPal has 'approved', 'failed', etc.
+        //             paymentId: payment.payment.id,
+        //             amountPaid: totalAmount,
+        //             currency: 'USD',
+        //             transactionDetails: payment.payment,
+        //         });
 
-                return {
-                    success: true,
-                    approvalUrl: payment.approvalUrl, // Redirect user to approval URL for PayPal
-                    paymentId: payment.payment.id,
-                    message: "Payment initiated with PayPal."
-                };
-            }
+        //         return {
+        //             success: true,
+        //             approvalUrl: payment.approvalUrl, // Redirect user to approval URL for PayPal
+        //             paymentId: payment.payment.id,
+        //             message: "Payment initiated with PayPal."
+        //         };
+        //     }
             
-        } else if (paymentMethod === 'sumup') {
+        // }
+
+        else if (paymentMethod === 'paypal') {
+            if (paymentId && payerId) {
+                // Case 1: Verifying the PayPal payment after the user has been redirected
+                console.log("Verifying PayPal payment...");
+
+                const executePaymentJson = {
+                    "payer_id": payerId, // The PayerID returned by PayPal
+                };
+
+                const payment = await new Promise((resolve, reject) => {
+                    paypal.payment.execute(paymentId, executePaymentJson, (error, payment) => {
+                        if (error) {
+                            reject(error);
+                        } else {
+                            resolve(payment);
+                        }
+                    });
+                });
+
+                if (payment.state === 'approved') {
+                    // Save payment information in your database
+                    await savePayment({
+                        userId,
+                        orderId,
+                        paymentMethod: 'paypal',
+                        paymentStatus: payment.state, // PayPal payment status
+                        paymentId: payment.id,
+                        amountPaid: totalAmount,
+                        currency: 'USD',
+                        transactionDetails: payment, // Full payment details
+                    });
+
+                    return {
+                        success: true,
+                        paymentId: payment.id,
+                        message: "Payment verified and captured successfully with PayPal."
+                    };
+                } else {
+                    return { success: false, message: "PayPal payment not approved." };
+                }
+
+            } else {
+                // Case 2: Creating a PayPal payment (before user approval)
+                const createPaymentJson = {
+                    "intent": "sale",
+                    "payer": {
+                        "payment_method": "paypal"
+                    },
+                    "transactions": [{
+                        "amount": {
+                            "currency": "USD",
+                            "total": totalAmount.toString()
+                        },
+                        "description": `Order ${orderId} payment`
+                    }],
+                    "redirect_urls": {
+                        "return_url": "http://44.196.192.232:2033/cart", // Success URL
+                        "cancel_url": "http://44.196.192.232:2033/" // Cancel URL
+                    }
+                };
+
+                const payment = await new Promise((resolve, reject) => {
+                    paypal.payment.create(createPaymentJson, (error, payment) => {
+                        if (error) {
+                            reject(error);
+                        } else {
+                            const approvalUrl = payment.links.find(link => link.rel === 'approval_url').href;
+                            console.log("PayPal approvalUrl", approvalUrl);
+
+                            resolve({ success: true, approvalUrl, payment });
+                        }
+                    });
+                });
+
+                if (payment.success) {
+                    // Save the initial PayPal payment in your database (before user approval)
+                    await savePayment({
+                        userId,
+                        orderId,
+                        paymentMethod: 'paypal',
+                        paymentStatus: 'initiated', // Initial status
+                        paymentId: payment.payment.id,
+                        amountPaid: totalAmount,
+                        currency: 'USD',
+                        transactionDetails: payment.payment,
+                    });
+
+                    return {
+                        success: true,
+                        approvalUrl: payment.approvalUrl, // Redirect user to approval URL for PayPal
+                        paymentId: payment.payment.id,
+                        message: "Payment initiated with PayPal. Awaiting user approval."
+                    };
+                }
+            }
+        }
+        
+        else if (paymentMethod === 'sumup') {
             // SumUp payment handling
             // Step 1: Authenticate with SumUp
             const accessToken = await getSumUpAccessToken();
