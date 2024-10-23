@@ -22,7 +22,7 @@ const voucherRoute = require('./routes/voucherRoute');
 const invoiceRoute = require('./routes/invoiceRoute');
 const notificationRoute = require('./routes/notificationRoute');
 const paymentRoute = require('./routes/paymentRoute');
-const contactRoute = require('./routes/contactRoutes');
+const contactRoute = require('./routes/contactRoute');
 
 
 
