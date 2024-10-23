@@ -424,7 +424,7 @@ const searchProduct = async (req, res, next) => {
 // to get the order summary
 const orderSummary = async (req, res, next) => {
     try {
-        const { userId, voucherCode, deliverySlotId, addressId } = req.body;
+        const { userId, voucherCode, deliverySlotId, addressId } = req.params;
 
         // Validate the address by addressId
         const address = await Address.findById(addressId);
@@ -480,17 +480,17 @@ const orderSummary = async (req, res, next) => {
             status: 200,
             message: "Order summary fetched successfully!",
             data: {
-                userId,
-                orderItems,
+                //userId,
+                //orderItems,
                 totalAmount,
                 totalDiscount, // Include total discount
-                voucher,
-                voucherUsed,
+                //voucher,
+                //voucherUsed,
                 finalAmount,
                 deliveryCharge,
                 totalWithDelivery,
-                deliverySlot,
-                address
+                //deliverySlot,
+                //address
             }
         });
     } catch (error) {

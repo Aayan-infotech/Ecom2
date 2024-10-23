@@ -64,7 +64,7 @@ router.get('/categoryproducts/:categoryId', getProductByCategoryId);
 
 router.get('/frequency', getProductFrequency);
 router.get('/summary/:orderId', getOrderSummary);
-router.get('/summary', orderSummary);
+router.get('/summary/:userId/:deliverySlotId/:addressId', orderSummary);
 
 
 module.exports = router;
