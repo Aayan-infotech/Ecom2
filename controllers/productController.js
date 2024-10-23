@@ -983,33 +983,33 @@ const processPayment = async (paymentMethod, token, totalAmount, paymentId, paym
 
             }
             // Case 2: No token, proceed with payment intent verification (default mobile flow)
-            // else if (paymentId) {
-            //     console.log("Verifying payment via PaymentIntent...");
+            else if (paymentId) {
+                console.log("Verifying payment via PaymentIntent...");
 
-            //     const paymentIntent = await stripe.paymentIntents.retrieve(paymentId);
+                const paymentIntent = await stripe.paymentIntents.retrieve(paymentId);
 
-            //     if (paymentIntent.status === 'succeeded') {
-            //         // Save payment information in your database
-            //         await savePayment({
-            //             userId,
-            //             orderId,
-            //             paymentMethod: 'stripe',
-            //             paymentStatus: paymentIntent.status,
-            //             paymentId: paymentIntent.id,
-            //             amountPaid: totalAmount,
-            //             currency: paymentIntent.currency,
-            //             transactionDetails: paymentIntent,
-            //         });
+                if (paymentIntent.status === 'succeeded') {
+                    // Save payment information in your database
+                    await savePayment({
+                        userId,
+                        orderId,
+                        paymentMethod: 'stripe',
+                        paymentStatus: paymentIntent.status,
+                        paymentId: paymentIntent.id,
+                        amountPaid: totalAmount,
+                        currency: paymentIntent.currency,
+                        transactionDetails: paymentIntent,
+                    });
 
-            //         return {
-            //             success: true,
-            //             paymentId: paymentIntent.id,
-            //             message: "Payment verified successfully with Stripe."
-            //         };
-            //     } else {
-            //         return { success: false, message: "Payment not completed with Stripe." };
-            //     }
-            // }
+                    return {
+                        success: true,
+                        paymentId: paymentIntent.id,
+                        message: "Payment verified successfully with Stripe."
+                    };
+                } else {
+                    return { success: false, message: "Payment not completed with Stripe." };
+                }
+            }
             else {
                 return { success: false, message: "No payment token or PaymentIntent provided." };
             }
