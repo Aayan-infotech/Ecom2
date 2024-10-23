@@ -18,6 +18,10 @@ const contactSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+  onBehalfOf: {
+    type: String,
+    required: false
+  },
   date: {
     type: Date,
     default: Date.now,

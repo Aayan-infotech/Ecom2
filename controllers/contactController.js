@@ -4,7 +4,7 @@ const Contact = require('../models/contactModel');
 // Handle contact form submission
 const createContact = async (req, res) => {
   try {
-    const { name, email, subject, message } = req.body;
+    const { name, email, subject, message, onBehalfOf } = req.body;
 
     // Validation (you can enhance this)
     if (!name || !email || !subject || !message) {
@@ -19,7 +19,8 @@ const createContact = async (req, res) => {
       name,
       email,
       subject,
-      message
+      message,
+      onBehalfOf
     });
 
     await newContact.save();
