@@ -22,6 +22,7 @@ const voucherRoute = require('./routes/voucherRoute');
 const invoiceRoute = require('./routes/invoiceRoute');
 const notificationRoute = require('./routes/notificationRoute');
 const paymentRoute = require('./routes/paymentRoute');
+const contactRoute = require('./routes/contactRoutes');
 
 
 
@@ -77,6 +78,7 @@ app.use('/api/voucher', voucherRoute); //added voucher routes
 app.use('/api/invoices', invoiceRoute); 
 app.use('/api/notification', notificationRoute);
 app.use('/api/payment', paymentRoute);
+app.use('/api/contact', contactRoute);
 
 app.get('/', (req, res) => {
     res.send("Congratulations! It's working");
