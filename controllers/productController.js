@@ -742,7 +742,7 @@ const buyNow = async (req, res, next) => {
 const createOrder = async (req, res, next) => {
     try {
         const { userId, voucherCode, deliverySlotId, addressId, paymentMethod, paymentId,
-            paymentStatus, token } = req.body;
+            paymentStatus, token, payerId } = req.body;
 
         // Validate the address by addressId
         // const addressIsValid = await validateAddress(userId, addressId);
@@ -774,7 +774,7 @@ const createOrder = async (req, res, next) => {
         const orderId = generateOrderId();
 
           // **Step 1: Verify Payment**
-          const paymentResult = await processPayment(paymentMethod, token, totalWithDelivery, paymentId, paymentStatus, userId, orderId);
+          const paymentResult = await processPayment(paymentMethod, token, totalWithDelivery, paymentId, paymentStatus, userId, orderId, payerId);
           console.log("paymentResult", paymentResult);
           
            // Check if payment was successful
@@ -942,7 +942,7 @@ const createSumUpPayment = async (accessToken, totalAmount, currency = 'USD', de
 };
 
 // Payment helper function
-const processPayment = async (paymentMethod, token, totalAmount, paymentId, paymentStatus, userId, orderId) => {
+const processPayment = async (paymentMethod, token, totalAmount, paymentId, paymentStatus, userId, orderId, payerId) => {
     try {
         if (paymentMethod === 'stripe') {
             // Case 1: Token is present, process payment via token (frontend handles token generation)
